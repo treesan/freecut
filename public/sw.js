@@ -1,5 +1,13 @@
 const CACHE_VERSION = 'freecut-app-shell-v1'
-const APP_SHELL_URLS = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest']
+const APP_SHELL_URLS = [
+  '/',
+  '/index.html',
+  '/favicon.svg',
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+]
 const CACHEABLE_DESTINATIONS = new Set(['document', 'script', 'style', 'font', 'image'])
 const EXCLUDED_PATH_PREFIXES = ['/moss-tts/']
 

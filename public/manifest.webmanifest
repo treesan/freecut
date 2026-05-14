@@ -1,6 +1,7 @@
 {
   "name": "FreeCut",
   "short_name": "FreeCut",
+  "id": "/",
   "description": "A browser-based video editor.",
   "start_url": "/",
   "scope": "/",
@@ -8,6 +9,7 @@
   "background_color": "#111827",
   "theme_color": "#111827",
   "orientation": "any",
+  "categories": ["video", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -26,6 +28,15 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/assets/landing/timeline.png",
+      "sizes": "2048x1536",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "FreeCut video editor timeline"
     }
   ]
 }
