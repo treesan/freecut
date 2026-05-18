@@ -55,41 +55,6 @@ interface ClipFilmstripProps {
   preferImmediateRendering?: boolean
 }
 
-/**
- * Find closest frame using binary search
- */
-function findClosestFrame(
-  frames: FilmstripFrame[],
-  targetTime: number,
-  maxDistance = Number.POSITIVE_INFINITY,
-): FilmstripFrame | null {
-  if (frames.length === 0) return null
-
-  let left = 0
-  let right = frames.length - 1
-  let bestFrame = frames[0]!
-  let bestDiff = Math.abs(bestFrame.timestamp - targetTime)
-
-  while (left <= right) {
-    const mid = Math.floor((left + right) / 2)
-    const frame = frames[mid]!
-    const diff = Math.abs(frame.timestamp - targetTime)
-
-    if (diff < bestDiff) {
-      bestDiff = diff
-      bestFrame = frame
-    }
-
-    if (frame.timestamp < targetTime) {
-      left = mid + 1
-    } else {
-      right = mid - 1
-    }
-  }
-
-  return bestDiff <= maxDistance ? bestFrame : null
-}
-
 function getTileStep(tileCount: number, maxTiles: number): number {
   if (tileCount <= maxTiles) return 1
   return Math.ceil(tileCount / maxTiles)
@@ -479,7 +444,7 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
   // Use filmstrip hook. `enabled` no longer requires the source blob URL —
   // disk-cached frames can render before useMediaBlobUrl resolves. The
   // extraction path inside the hook still gates on blobUrl.
-  const { frames, isLoading, isComplete, error } = useFilmstrip({
+  const { frames, isLoading, error } = useFilmstrip({
     mediaId,
     blobUrl: filmstripSourceUrl,
     duration: sourceDuration,
@@ -489,15 +454,6 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
     targetFrameCount,
     targetFrameIndices,
   })
-
-  const frameByIndex = useMemo(() => {
-    if (!frames || frames.length === 0) return null
-    const map = new Map<number, FilmstripFrame>()
-    for (const frame of frames) {
-      map.set(frame.index, frame)
-    }
-    return map
-  }, [frames])
 
   const handleFrameSourceError = useCallback(
     (frameIndex: number) => {
@@ -518,100 +474,98 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
     [mediaId],
   )
 
-  // Calculate tiles - maps each tile position to the best frame.
-  // During active zoom, drop tile density to match the request density (the
-  // extraction path already does this). Dedupe by frame.index and merge spans
-  // so the same frame stays in the same DOM node across zoom steps — keyed by
-  // frame.index, only style.left/width changes during zoom (no src thrash).
+  // Pixel-aligned slot grid. Slots are at x = 0, thumbnailWidth, 2*thumbnailWidth, …
+  // up to the clip's right edge. Each slot's content is the closest available
+  // extracted frame for the source time at that slot's center — so extraction
+  // gaps (e.g. background-stride misses) are silently filled with the nearest
+  // frame instead of producing an alternating-size visual.
+  //
+  // - Tile width is exactly thumbnailWidth — never stretched, squashed, or
+  //   merged. Every rendered tile is identical in size.
+  // - key=slot is the integer slot index on the pixel grid. At fixed zoom the
+  //   slot set never changes; scrolling can't refresh tiles, and a slot's
+  //   frame prop updating as extraction lands doesn't remount its DOM.
+  // - Zoom changes the slot count (clip width grew/shrunk), which mounts or
+  //   unmounts tiles only at the clip's right edge — the visible portion's
+  //   slots stay stable.
   const tiles = useMemo(() => {
-    if (!frames || frames.length === 0 || thumbnailWidth === 0 || renderPixelsPerSecond <= 0)
-      return []
+    if (!frames || frames.length === 0 || renderPixelsPerSecond <= 0) return []
+    if (effectiveEnd <= effectiveStart) return []
 
-    const tileCount = Math.ceil(renderClipWidth / thumbnailWidth)
-    if (tileCount <= 0) return []
+    const pixelsPerSourceSecond = renderPixelsPerSecond / Math.max(0.0001, speed)
+    const tileWidth = thumbnailWidth
+    const slotCount = Math.floor(renderClipWidth / tileWidth)
+    if (slotCount === 0) return []
 
-    const { paddedEndX, startTile, endTile } = renderWindow
-    const visibleTileCount = Math.max(0, endTile - startTile)
-    if (visibleTileCount <= 0) return []
-
-    const maxTiles = isInteractionLod
-      ? getInteractionMaxTiles(renderPixelsPerSecond)
-      : MAX_TILES_IDLE
-    const tileStep = getTileStep(visibleTileCount, maxTiles)
-    const tileDurationSeconds = (thumbnailWidth / renderPixelsPerSecond) * speed
-    const candidateWindowPadSeconds = Math.max(1, tileDurationSeconds * Math.max(2, tileStep))
-    const windowStartTime = getSourceTimeForX(renderWindow.paddedStartX)
-    const windowEndTime = getSourceTimeForX(renderWindow.paddedEndX)
-    const renderStartTime = Math.max(
-      0,
-      Math.min(windowStartTime, windowEndTime) - candidateWindowPadSeconds,
-    )
-    const renderEndTime = Math.min(
-      sourceDuration,
-      Math.max(windowStartTime, windowEndTime) + candidateWindowPadSeconds,
-    )
-    const candidateFrames = frames.filter(
-      (frame) => frame.timestamp >= renderStartTime && frame.timestamp <= renderEndTime,
-    )
-    const candidateFrameByIndex =
-      candidateFrames.length === frames.length
-        ? frameByIndex
-        : new Map(candidateFrames.map((frame) => [frame.index, frame] as const))
-    // Build in slot order so adjacent slots that resolve to the same frame can
-    // merge into a single wider tile (preserves visible coverage without
-    // duplicating DOM nodes / breaking the key={frame.index} contract).
-    const result: { frame: FilmstripFrame; x: number; width: number }[] = []
-    let last: { frame: FilmstripFrame; x: number; width: number } | null = null
-
-    for (let tile = startTile; tile < endTile; tile += tileStep) {
-      const tileX = tile * thumbnailWidth
-      if (tileX >= paddedEndX) break
-      const tileWidth = Math.max(
-        1,
-        Math.min(renderClipWidth, Math.min((tile + tileStep) * thumbnailWidth, paddedEndX)) - tileX,
-      )
-      const tileCenterX = tileX + tileWidth * 0.5
-      const tileTime = getSourceTimeForX(tileCenterX)
-      const nearestFrameIndex = Math.max(0, Math.round(tileTime))
-      const frame =
-        candidateFrameByIndex?.get(nearestFrameIndex) ??
-        findClosestFrame(candidateFrames, tileTime) ??
-        // Fall back to full frame set — always cover gaps with the closest available frame
-        findClosestFrame(frames, tileTime)
-
-      if (!frame) continue
-
-      if (last && last.frame.index === frame.index) {
-        // Same frame as previous slot — extend the existing tile right edge.
-        last.width = tileX + tileWidth - last.x
-      } else {
-        last = { frame, x: tileX, width: tileWidth }
-        result.push(last)
+    // frames is sorted by index in the cache; binary-search for the closest
+    // available frame to a target source time.
+    const findClosestFrame = (targetTime: number): FilmstripFrame | null => {
+      if (frames.length === 0) return null
+      let lo = 0
+      let hi = frames.length - 1
+      let best = frames[0]!
+      let bestDiff = Math.abs(best.index - targetTime)
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        const f = frames[mid]!
+        const diff = Math.abs(f.index - targetTime)
+        if (diff < bestDiff) {
+          best = f
+          bestDiff = diff
+        }
+        if (f.index < targetTime) lo = mid + 1
+        else hi = mid - 1
       }
+      return best
+    }
+
+    const result: { slot: number; frame: FilmstripFrame; x: number; width: number }[] = []
+
+    for (let slot = 0; slot < slotCount; slot++) {
+      const slotX = slot * tileWidth
+      const slotCenterX = slotX + tileWidth * 0.5
+      const slotCenterTime = isReversed
+        ? effectiveEnd - slotCenterX / pixelsPerSourceSecond
+        : effectiveStart + slotCenterX / pixelsPerSourceSecond
+      const frame = findClosestFrame(slotCenterTime)
+      if (!frame) continue
+      result.push({ slot, frame, x: slotX, width: tileWidth })
     }
 
     return result
   }, [
     frames,
-    frameByIndex,
     renderPixelsPerSecond,
     renderClipWidth,
-    sourceDuration,
-    getSourceTimeForX,
+    effectiveStart,
+    effectiveEnd,
+    isReversed,
     speed,
     thumbnailWidth,
-    renderWindow,
-    isInteractionLod,
   ])
 
-  // Pick a cover frame from the middle of available frames — used as a repeating
-  // CSS background behind tiles so gaps during zoom reconciliation show a frame
-  // instead of black. Track the full frame for stale-URL probing.
+  // Lock a stable cover-frame index on first paint. Without this, the middle
+  // frame moves as refinement extraction adds new frames, so the repeating
+  // background URL swaps mid-zoom and produces a visible flash. Resetting on
+  // mediaId change keeps relinked clips correct.
+  const [coverFrameIndex, setCoverFrameIndex] = useState<number | null>(null)
+  useEffect(() => {
+    setCoverFrameIndex(null)
+  }, [mediaId])
+  useEffect(() => {
+    if (coverFrameIndex !== null) return
+    if (!frames || frames.length === 0) return
+    const mid = frames[Math.floor(frames.length / 2)] ?? frames[0] ?? null
+    if (mid) setCoverFrameIndex(mid.index)
+  }, [coverFrameIndex, frames])
   const coverFrame = useMemo(() => {
     if (!frames || frames.length === 0) return null
-    const mid = Math.floor(frames.length / 2)
-    return frames[mid] ?? frames[0] ?? null
-  }, [frames])
+    if (coverFrameIndex !== null) {
+      const exact = frames.find((frame) => frame.index === coverFrameIndex)
+      if (exact) return exact
+    }
+    return frames[Math.floor(frames.length / 2)] ?? frames[0] ?? null
+  }, [coverFrameIndex, frames])
   const coverFrameUrl = coverFrame?.url ?? null
 
   if (error) {
@@ -632,23 +586,29 @@ export const ClipFilmstrip = memo(function ClipFilmstrip({
 
   return (
     <div ref={containerRef} className="absolute inset-0">
-      {/* Show shimmer skeleton behind while loading */}
-      {!isComplete && <FilmstripSkeleton clipWidth={visibleClipWidth} height={height} />}
-      <div
-        className="absolute inset-0 overflow-hidden pointer-events-none"
-        style={
-          coverFrameUrl
-            ? {
-                backgroundImage: `url(${coverFrameUrl})`,
-                backgroundRepeat: 'repeat-x',
-                backgroundSize: `${thumbnailWidth}px ${height}px`,
-              }
-            : undefined
-        }
-      >
-        {tiles.map(({ frame, x, width }) => (
+      {/* No inline shimmer once we have any frames. The cover-frame background
+          + already-rendered tiles are the user's visual feedback. The shimmer
+          used to re-show whenever extraction refinement flipped `isComplete`
+          to false (e.g. after a zoom-triggered target update), which read as
+          a "blink/refresh" mid-zoom — even though the loaded frames never
+          actually went away. */}
+      {/* Stable cover-frame background layer — fills any gap before a tile's
+          canvas has painted its bitmap, so the user never sees a black hole. */}
+      {coverFrameUrl && (
+        <div
+          aria-hidden
+          className="absolute inset-0 overflow-hidden pointer-events-none"
+          style={{
+            backgroundImage: `url(${coverFrameUrl})`,
+            backgroundRepeat: 'repeat-x',
+            backgroundSize: `${thumbnailWidth}px ${height}px`,
+          }}
+        />
+      )}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {tiles.map(({ slot, frame, x, width }) => (
           <FilmstripTile
-            key={frame.index}
+            key={slot}
             src={frame.url}
             bitmap={frame.bitmap}
             x={x}
