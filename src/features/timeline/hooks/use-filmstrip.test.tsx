@@ -17,6 +17,7 @@ vi.mock('../services/filmstrip-cache', () => ({
 
 vi.mock('./preview-work-budget', () => ({
   getPreviewStartupDelayMs: vi.fn(() => 0),
+  PREVIEW_IMMEDIATE_IDLE_TIMEOUT_MS: 200,
   schedulePreviewWork: vi.fn((task: () => void) => {
     task()
     return () => {}

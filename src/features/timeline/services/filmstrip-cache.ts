@@ -27,7 +27,11 @@ import {
 } from '@/features/timeline/constants'
 import { filmstripStorage, type FilmstripFrame } from './filmstrip-storage'
 import { FilmstripMemoryState } from './filmstrip-memory-state'
-import type { ExtractRequest, WorkerResponse } from '../workers/filmstrip-extraction-worker'
+import type {
+  ExtractRequest,
+  WarmRequest,
+  WorkerResponse,
+} from '../workers/filmstrip-extraction-worker'
 
 export { THUMBNAIL_WIDTH }
 export type { FilmstripFrame }
@@ -213,6 +217,38 @@ class FilmstripCacheService {
   }
   private metricsHistory: ExtractionMetricSample[] = []
   private lastMemoryCheckAt = 0
+  private prewarmStarted = false
+
+  /**
+   * Eagerly boot one extraction worker and load mediabunny so the first real
+   * extraction skips worker boot + dynamic-import latency (~100-300ms total).
+   * Idempotent and safe to call repeatedly; only the first call does work.
+   *
+   * Fires synchronously and releases the worker immediately so the next
+   * acquireWorker() call gets it back (with the `warm` message still queued).
+   * The worker processes warm → loadMediabunny → ignored 'warmed' response,
+   * then any queued extract message. Net result: mediabunny is loaded once
+   * per worker realm instead of per extraction.
+   */
+  prewarm(): void {
+    if (this.prewarmStarted) return
+    this.prewarmStarted = true
+
+    let worker: Worker
+    try {
+      worker = this.acquireWorker()
+    } catch (error) {
+      logger.warn('Failed to acquire worker for prewarm', error)
+      this.prewarmStarted = false
+      return
+    }
+
+    const requestId = crypto.randomUUID()
+    worker.postMessage({ type: 'warm', requestId } satisfies WarmRequest)
+    // Release immediately so the next acquireWorker() returns this worker
+    // (with the warm message still queued in front of any extract message).
+    this.releaseWorker(worker)
+  }
 
   private get cacheBytes(): number {
     return this.memoryState.sizeBytes
@@ -978,6 +1014,9 @@ class FilmstripCacheService {
    * Subscribe to filmstrip updates
    */
   subscribe(mediaId: string, callback: FilmstripUpdateCallback): () => void {
+    // Active interest in any filmstrip is the cue to prewarm the worker pool.
+    // Idempotent — only the first call does work.
+    this.prewarm()
     this.clearIdleEvictionTimer(mediaId)
     if (!this.updateCallbacks.has(mediaId)) {
       this.updateCallbacks.set(mediaId, new Set())
@@ -1618,6 +1657,10 @@ class FilmstripCacheService {
       // Handle worker messages
       worker.onmessage = async (e: MessageEvent<WorkerResponse>) => {
         const response = e.data
+
+        // Stale 'warmed' from an earlier prewarm() can arrive after this
+        // worker was reacquired — ignore it.
+        if (response.type === 'warmed') return
 
         if (response.type === 'progress') {
           workerState.frameCount = response.frameCount

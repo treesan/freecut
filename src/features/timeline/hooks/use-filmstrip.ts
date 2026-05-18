@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useEffectEvent, useMemo } from 'react'
 import { filmstripCache, type Filmstrip, type FilmstripFrame } from '../services/filmstrip-cache'
-import { getPreviewStartupDelayMs, schedulePreviewWork } from './preview-work-budget'
+import {
+  getPreviewStartupDelayMs,
+  PREVIEW_IMMEDIATE_IDLE_TIMEOUT_MS,
+  schedulePreviewWork,
+} from './preview-work-budget'
 
 export type { FilmstripFrame }
 
@@ -248,6 +252,9 @@ export function useFilmstrip({
       },
       {
         delayMs: shouldStartImmediately ? 0 : getPreviewStartupDelayMs(duration),
+        // Cold-start (no frames yet): don't let extraction sit waiting for an
+        // idle slot for over a second. After this window, fire anyway.
+        idleTimeoutMs: shouldStartImmediately ? PREVIEW_IMMEDIATE_IDLE_TIMEOUT_MS : undefined,
         ignoreAudioStartupHold: true,
       },
     )
