@@ -221,7 +221,7 @@ export interface ItemRenderContext {
   subCompRenderData: Map<string, SubCompRenderData>
 
   // GPU effects pipeline (lazily initialized)
-  gpuPipeline?: import('@/infrastructure/gpu/effects').EffectsPipeline | null
+  gpuPipeline?: import('@/infrastructure/gpu-effects').EffectsPipeline | null
 
   // GPU transition pipeline (lazily initialized, shares device with gpuPipeline)
   gpuTransitionPipeline?: import('@/infrastructure/gpu/transitions').TransitionPipeline | null

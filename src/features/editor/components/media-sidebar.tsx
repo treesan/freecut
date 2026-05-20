@@ -50,7 +50,7 @@ import { EFFECT_PRESETS } from '@/types/effects'
 import {
   getGpuCategoriesWithEffects,
   getGpuEffectDefaultParams,
-} from '@/infrastructure/gpu/effects'
+} from '@/infrastructure/gpu-effects'
 import { useEffectPreviews } from '@/features/editor/deps/effects-contract'
 import { createLogger } from '@/shared/logging/logger'
 import { useSettingsStore } from '@/features/editor/deps/settings'

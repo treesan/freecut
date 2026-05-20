@@ -39,7 +39,7 @@ import {
   combineEffects,
   type AdjustmentLayerWithTrackOrder,
 } from './canvas-effects'
-import { EffectsPipeline } from '@/infrastructure/gpu/effects'
+import { EffectsPipeline } from '@/infrastructure/gpu-effects'
 import { TransitionPipeline } from '@/infrastructure/gpu/transitions'
 import { MediaBlendPipeline, MediaRenderPipeline } from '@/infrastructure/gpu/media'
 import { ShapeRenderPipeline } from '@/infrastructure/gpu/shapes'

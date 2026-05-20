@@ -13,7 +13,6 @@ const IMPORT_EXPORT_SPEC_REGEX =
 const DYNAMIC_IMPORT_SPEC_REGEX = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
 
 const ALLOWED_FACADE_FILES = new Set([
-  'src/infrastructure/gpu/effects.ts',
   'src/infrastructure/gpu/compositor.ts',
   'src/infrastructure/gpu/transitions.ts',
   'src/infrastructure/gpu/masks.ts',

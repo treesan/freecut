@@ -3,7 +3,7 @@
  * Supports animating transform properties over time with easing.
  */
 
-import { getGpuEffect } from '@/infrastructure/gpu/effects'
+import { getGpuEffect } from '@/infrastructure/gpu-effects'
 
 /** Properties that can be animated via keyframes */
 export type BuiltInAnimatableProperty =
