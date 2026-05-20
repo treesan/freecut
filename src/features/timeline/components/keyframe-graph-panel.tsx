@@ -94,11 +94,20 @@ interface KeyframeGraphPanelProps {
 
 type KeyframeEditorMode = 'graph' | 'dopesheet'
 const KEYFRAME_EDITOR_MODE_STORAGE_KEY = 'timeline:keyframeEditorMode'
-const EASING_OPTIONS: Array<{ value: EasingType; labelKey: string }> = [
-  { value: 'linear', labelKey: 'timeline.keyframeEditor.easing.linear' },
-  { value: 'ease-in', labelKey: 'timeline.keyframeEditor.easing.easeIn' },
-  { value: 'ease-in-out', labelKey: 'timeline.keyframeEditor.easing.easeInOut' },
-  { value: 'ease-out', labelKey: 'timeline.keyframeEditor.easing.easeOut' },
+const EASING_OPTIONS: Array<{ value: EasingType; labelKey: string; defaultLabel: string }> = [
+  { value: 'hold', labelKey: 'timeline.keyframeEditor.easing.hold', defaultLabel: 'Hold' },
+  { value: 'linear', labelKey: 'timeline.keyframeEditor.easing.linear', defaultLabel: 'Linear' },
+  { value: 'ease-in', labelKey: 'timeline.keyframeEditor.easing.easeIn', defaultLabel: 'Ease In' },
+  {
+    value: 'ease-in-out',
+    labelKey: 'timeline.keyframeEditor.easing.easeInOut',
+    defaultLabel: 'Ease In/Out',
+  },
+  {
+    value: 'ease-out',
+    labelKey: 'timeline.keyframeEditor.easing.easeOut',
+    defaultLabel: 'Ease Out',
+  },
 ]
 const BEZIER_PRESETS = [
   {
@@ -493,7 +502,11 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
 }: KeyframeGraphPanelProps) {
   const { t } = useTranslation()
   const easingOptions = useMemo(
-    () => EASING_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) })),
+    () =>
+      EASING_OPTIONS.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey, { defaultValue: option.defaultLabel }),
+      })),
     [t],
   )
   const hotkeys = useResolvedHotkeys()

@@ -15,6 +15,10 @@ function linear(t: number): number {
   return t
 }
 
+function hold(_t: number): number {
+  return 0
+}
+
 export function easeIn(t: number): number {
   return t * t
 }
@@ -91,6 +95,7 @@ const easingFunctions: Record<EasingType, (t: number) => number> = {
   'ease-in': easeIn,
   'ease-out': easeOut,
   'ease-in-out': easeInOut,
+  hold,
   'cubic-bezier': (t) => cubicBezier(t, DEFAULT_BEZIER_POINTS),
   spring: (t) => springEasing(t, DEFAULT_SPRING_PARAMS),
 }

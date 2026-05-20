@@ -197,7 +197,7 @@ interface UseGraphInteractionReturn {
   /** Handle pointer down on graph background (starts marquee selection) */
   handleBackgroundPointerDown: (event: React.PointerEvent<SVGElement>) => void
   /** Handle graph background click (deselect) */
-  handleBackgroundClick: (event: React.MouseEvent<SVGElement>) => void
+  handleBackgroundClick: (event: React.MouseEvent) => void
   /** Timestamp of last keyframe/handle pointerDown (for click dedup) */
   lastInteractionTime: React.RefObject<number>
   /** Active marquee rect while selecting */
@@ -1291,8 +1291,7 @@ export function useGraphInteraction({
 
   // Handle background click (deselect)
   const handleBackgroundClick = useCallback(
-    (event: React.MouseEvent<SVGElement>) => {
-      void event
+    (_event: React.MouseEvent) => {
       if (disabled) return
       if (marqueeJustEndedRef.current) return
       // Pointer capture redirects click targets to SVG — ignore clicks

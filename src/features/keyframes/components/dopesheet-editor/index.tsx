@@ -336,6 +336,16 @@ function InterpolationTypeIcon({ type }: { type: EasingType }) {
       return <path d={`M${formatPoint(start)}L${formatPoint(end)}`} {...curveProps} />
     }
 
+    if (type === 'hold') {
+      const step = toScreenPoint(1, 0)
+      return (
+        <path
+          d={`M${formatPoint(start)}L${formatPoint(step)}L${formatPoint(end)}`}
+          {...curveProps}
+        />
+      )
+    }
+
     if (type === 'ease-in') {
       return renderBezier(0.42, 0, 1, 1)
     }
