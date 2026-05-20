@@ -14,11 +14,7 @@
   },
   "overrides": [
     {
-      "files": [
-        "src/shared/animation/**/*.{ts,tsx}",
-        "src/shared/timeline/**/*.{ts,tsx}",
-        "src/shared/projects/**/*.{ts,tsx}"
-      ],
+      "files": ["src/shared/timeline/**/*.{ts,tsx}", "src/shared/projects/**/*.{ts,tsx}"],
       "rules": {
         "no-restricted-imports": [
           "error",

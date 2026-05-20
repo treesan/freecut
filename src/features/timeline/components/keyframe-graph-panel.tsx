@@ -14,7 +14,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/shared/ui/cn'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ErrorBoundary } from '@/components/error-boundary'
+import { ErrorBoundary } from '@/app/error-boundary'
 import {
   Select,
   SelectContent,

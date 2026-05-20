@@ -27,7 +27,7 @@ import {
 import { getPropertyKeyframes, interpolatePropertyValue } from '@/features/export/deps/keyframes'
 import { blobUrlManager } from '@/infrastructure/browser/blob-url-manager'
 import { getMediaAudioCodecById, resolveMediaUrl } from '@/features/export/deps/media-library'
-import { ensureAc3DecoderRegistered, isAc3AudioCodec } from '@/shared/media/ac3-decoder'
+import { ensureAc3DecoderRegistered, isAc3AudioCodec } from '@/shared/utils/ac3-decoder'
 import {
   getLinkedAudioCompanion,
   getLinkedCompositionAudioCompanion,

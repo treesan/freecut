@@ -51,16 +51,15 @@ src/
 │   ├── storage/           # Workspace FS persistence + legacy IDB migration
 │   └── thumbnails/        # GPU thumbnail renderer + sampling strategy
 ├── shared/                # Framework-agnostic primitives + cross-feature state
-│   ├── animation/         # Easing math primitives
 │   ├── timeline/          # Transition engine/registry/renderers, defaults
 │   ├── projects/          # Schema migrations and normalization
 │   ├── state/             # Zustand stores (playback, selection, dialogs, editor)
+│   ├── marquee/           # Marquee-selection hook + overlay (paired unit)
 │   ├── logging/           # Structured logger, frame jitter monitor
 │   ├── ui/                # cn helper, property controls
 │   ├── typography/        # Font loading, text style presets
 │   ├── graphics/          # Shape generators and path helpers
-│   ├── hooks/             # Cross-feature React hooks
-│   └── utils/             # Managed workers, media utilities, color math, etc.
+│   └── utils/             # Managed workers, color/curve math, easing, async, etc.
 ├── components/            # App-level shared components + shadcn/ui
 ├── app/                   # App bootstrap, providers, debug utilities
 ├── config/                # Hotkeys + editor layout config

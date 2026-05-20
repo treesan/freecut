@@ -59,7 +59,7 @@ vi.mock('@/components/ui/resizable', () => ({
   ResizableHandle: () => <div data-testid="resizable-handle" />,
 }))
 
-vi.mock('@/components/error-boundary', () => ({
+vi.mock('@/app/error-boundary', () => ({
   ErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 

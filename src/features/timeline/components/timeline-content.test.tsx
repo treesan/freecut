@@ -23,7 +23,7 @@ vi.mock('../hooks/use-timeline-zoom', () => ({
   }),
 }))
 
-vi.mock('@/shared/hooks/use-marquee-selection', () => {
+vi.mock('@/shared/marquee/use-marquee-selection', () => {
   const INACTIVE = { active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 }
   return {
     useMarqueeSelection: () => ({
@@ -72,7 +72,7 @@ vi.mock('./track-row-frame', () => ({
   TrackSectionDivider: () => null,
 }))
 
-vi.mock('@/components/marquee-overlay', () => ({
+vi.mock('@/shared/marquee/marquee-overlay', () => ({
   MarqueeOverlay: () => null,
 }))
 

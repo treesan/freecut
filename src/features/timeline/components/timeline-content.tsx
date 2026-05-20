@@ -13,7 +13,7 @@ import { useEditorStore } from '@/shared/state/editor'
 import { useSelectionStore } from '@/shared/state/selection'
 
 // Hooks
-import { useMarqueeSelection } from '@/shared/hooks/use-marquee-selection'
+import { useMarqueeSelection } from '@/shared/marquee/use-marquee-selection'
 import { useWaveformPrefetch } from '../hooks/use-waveform-prefetch'
 
 // Constants
@@ -38,7 +38,7 @@ import { TimelineTrack } from './timeline-track'
 import { TimelineGuidelines } from './timeline-guidelines'
 import { TimelineMediaDropZone } from './timeline-media-drop-zone'
 import { TrackRowFrame, TrackSectionDivider } from './track-row-frame'
-import { MarqueeOverlay } from '@/components/marquee-overlay'
+import { MarqueeOverlay } from '@/shared/marquee/marquee-overlay'
 
 // Group utilities
 import { getVisibleTrackIds } from '../utils/group-utils'

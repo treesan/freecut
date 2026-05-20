@@ -4,18 +4,17 @@ Reusable building blocks shared across the app.
 
 This is the single home for framework-agnostic logic and cross-feature
 primitives. Most modules avoid React/routing entirely; UI primitives that
-do use React (e.g. `state/`, `ui/`, `hooks/`, `components/`) stay
-independent of any specific feature.
+do use React (e.g. `state/`, `ui/`, `marquee/`) stay independent of any
+specific feature.
 
 A few subpaths are held to a stricter "framework-agnostic" standard —
-`animation/`, `timeline/`, `projects/` — enforced via `.oxlintrc.json`.
-Those modules must not import React, routing, or app/features/runtime
-code. Other shared subpaths may use React when the primitive needs it
-(e.g. `state/` Zustand stores, `ui/property-controls/`).
+`timeline/` and `projects/` — enforced via `.oxlintrc.json`. Those
+modules must not import React, routing, or app/features/runtime code.
+Other shared subpaths may use React when the primitive needs it
+(e.g. `state/` Zustand stores, `ui/property-controls/`, `marquee/`).
 
 ## Domain modules (framework-agnostic, enforced)
 
-- `animation/easing.ts` — easing math primitives.
 - `timeline/defaults.ts` — canonical timeline defaults (track height, fps).
 - `timeline/transitions/*` — transition engine, registry, planner, and
   per-style renderers (Canvas 2D fallbacks).
@@ -41,11 +40,8 @@ code. Other shared subpaths may use React when the primitive needs it
 - `ui/property-controls/*` — shared property panel controls
   (`PropertySection`, `PropertyRow`, `NumberInput`, `ColorPicker`).
 - `ui/cn.ts` — shared className merge utility.
-
-## Hooks
-
-- `hooks/use-marquee-selection.ts` — reusable marquee-selection
-  controller used across timeline/preview/media-library.
+- `marquee/use-marquee-selection.ts` + `marquee/marquee-overlay.tsx` —
+  paired hook + overlay for drag-rectangle multi-select.
 
 ## Typography & graphics
 
@@ -55,11 +51,7 @@ code. Other shared subpaths may use React when the primitive needs it
 ## Utilities
 
 - `utils/*` — managed worker pools/sessions, time/format helpers, color
-  math, curve/spline math, mask/audio DSP, transcription cancellation,
-  and so on.
-- `async/async-utils.ts` — async concurrency helpers.
+  math, curve/spline math, mask/audio DSP, easing primitives, async
+  concurrency helpers, AC-3 decoder registration, domain event types,
+  transcription cancellation, and so on.
 - `logging/logger.ts` — structured logger entry point.
-- `media/ac3-decoder.ts` — AC-3 codec detection and lazy decoder
-  registration for mediabunny.
-- `events/domain-events.ts` — shared event bus types.
-- `components/color-scopes-view.tsx` — shared color scope visualization.
