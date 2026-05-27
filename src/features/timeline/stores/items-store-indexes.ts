@@ -9,8 +9,6 @@ export interface ItemsIndexState {
   itemById: Record<string, TimelineItem>
   itemsByLinkedGroupId: Record<string, TimelineItem[]>
   linkedItemsByItemId: Record<string, TimelineItem[]>
-  /** Set of clip IDs that can regenerate captions, including legacy generated captions */
-  replaceableCaptionClipIds: Set<string>
   maxItemEndFrame: number
 }
 
@@ -84,6 +82,21 @@ function isLegacyGeneratedCaptionItem(item: TimelineItem): item is TextItem {
     plainText.trim().length > 0 &&
     item.label === plainText.slice(0, 48)
   )
+}
+
+// Lazy, items-keyed memoization. The legacy caption-detection pass is O(N) with
+// string slicing + per-mediaId sorts; running it inside withItemIndexes makes
+// every drag-frame mutation pay for it. Callers go through
+// `selectReplaceableCaptionClipIds` instead, which rebuilds only when `items`
+// changes identity.
+let captionCacheItems: TimelineItem[] | null = null
+let captionCacheSet: Set<string> = new Set()
+
+export function selectReplaceableCaptionClipIds(state: { items: TimelineItem[] }): Set<string> {
+  if (captionCacheItems === state.items) return captionCacheSet
+  captionCacheItems = state.items
+  captionCacheSet = buildReplaceableCaptionClipIds(state.items)
+  return captionCacheSet
 }
 
 export function buildReplaceableCaptionClipIds(items: TimelineItem[]): Set<string> {
@@ -271,7 +284,6 @@ export function withItemIndexes(
       itemsByLinkedGroupId,
       previous.linkedItemsByItemId,
     ),
-    replaceableCaptionClipIds: buildReplaceableCaptionClipIds(items),
     maxItemEndFrame: computeMaxItemEndFrame(items),
   }
 }

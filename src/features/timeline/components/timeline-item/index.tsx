@@ -4,6 +4,7 @@ import type { TimelineItem as TimelineItemType } from '@/types/timeline'
 import { useShallow } from 'zustand/react/shallow'
 import { useTimelineStore } from '../../stores/timeline-store'
 import { useItemsStore } from '../../stores/items-store'
+import { selectReplaceableCaptionClipIds } from '../../stores/items-store-indexes'
 import { useKeyframesStore } from '../../stores/keyframes-store'
 import { useTransitionsStore } from '../../stores/transitions-store'
 import { useEffectDropPreviewStore } from '../../stores/effect-drop-preview-store'
@@ -247,10 +248,10 @@ export const TimelineItem = memo(
         [item.mediaId, item.id],
       ),
     )
-    // O(1) index lookup that preserves both explicit captionSource links and
-    // legacy generated-caption detection.
+    // Lazy, items-keyed memo: legacy generated-caption detection rebuilds only
+    // when the items array identity changes (not on every store mutation).
     const hasGeneratedCaptions = useItemsStore(
-      useCallback((s) => s.replaceableCaptionClipIds.has(item.id), [item.id]),
+      useCallback((s) => selectReplaceableCaptionClipIds(s).has(item.id), [item.id]),
     )
     // O(1) via index, including legacy linked audio/video pairs.
     const isLinked = useItemsStore(useCallback((s) => !!s.linkedItemsByItemId[item.id], [item.id]))

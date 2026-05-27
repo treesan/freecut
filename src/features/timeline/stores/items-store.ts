@@ -56,8 +56,6 @@ interface ItemsState {
   itemById: Record<string, TimelineItem>
   itemsByLinkedGroupId: Record<string, TimelineItem[]>
   linkedItemsByItemId: Record<string, TimelineItem[]>
-  /** Set of clip IDs that can regenerate captions, including legacy generated captions */
-  replaceableCaptionClipIds: Set<string>
   maxItemEndFrame: number
   mediaDependencyIds: string[]
   mediaDependencyVersion: number
@@ -122,7 +120,6 @@ export const useItemsStore = create<ItemsState & ItemsActions>()((set, get) => (
   itemById: {},
   itemsByLinkedGroupId: {},
   linkedItemsByItemId: {},
-  replaceableCaptionClipIds: new Set<string>(),
   maxItemEndFrame: 0,
   mediaDependencyIds: [],
   mediaDependencyVersion: 0,

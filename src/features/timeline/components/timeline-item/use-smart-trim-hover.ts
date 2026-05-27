@@ -54,20 +54,9 @@ export function useSmartTrimHover({
   const [smartTrimIntent, setSmartTrimIntent] = useState<SmartTrimIntent>(null)
   const [smartBodyIntent, setSmartBodyIntent] = useState<SmartBodyIntent>(null)
 
-  // Clear stale hover state when the active tool changes (mouse may be stationary)
-  useEffect(() => {
-    setHoveredEdge(null)
-    setSmartTrimIntent(null)
-    setSmartBodyIntent(null)
-    useRollHoverStore.getState().clearRollHover(item.id)
-  }, [activeTool, item.id])
-
   const hoveredEdgeRef = useRef(hoveredEdge)
-  hoveredEdgeRef.current = hoveredEdge
   const smartTrimIntentRef = useRef(smartTrimIntent)
-  smartTrimIntentRef.current = smartTrimIntent
   const smartBodyIntentRef = useRef(smartBodyIntent)
-  smartBodyIntentRef.current = smartBodyIntent
 
   const syncHoveredEdge = useCallback((nextHoveredEdge: 'start' | 'end' | null) => {
     hoveredEdgeRef.current = nextHoveredEdge
@@ -83,6 +72,14 @@ export function useSmartTrimHover({
     smartBodyIntentRef.current = nextIntent
     setSmartBodyIntent(nextIntent)
   }, [])
+
+  // Clear stale hover state when the active tool changes (mouse may be stationary)
+  useEffect(() => {
+    syncHoveredEdge(null)
+    syncSmartTrimIntent(null)
+    syncSmartBodyIntent(null)
+    useRollHoverStore.getState().clearRollHover(item.id)
+  }, [activeTool, item.id, syncHoveredEdge, syncSmartBodyIntent, syncSmartTrimIntent])
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
