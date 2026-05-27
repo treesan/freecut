@@ -314,13 +314,13 @@ export const TimelineItem = memo(
         [item.mediaId],
       ),
     )
-    const mediaFileName = useMediaLibraryStore(
+    const mediaForItem = useMediaLibraryStore(
       useCallback(
-        (s) =>
-          item.mediaId ? (s.mediaItems.find((m) => m.id === item.mediaId)?.fileName ?? '') : '',
+        (s) => (item.mediaId ? (s.mediaItems.find((m) => m.id === item.mediaId) ?? null) : null),
         [item.mediaId],
       ),
     )
+    const mediaFileName = mediaForItem?.fileName ?? ''
     const [captionDialogOpen, setCaptionDialogOpen] = useState(false)
     const [captionDialogError, setCaptionDialogError] = useState<string | null>(null)
     const mediaHasTranscript = transcriptStatus === 'ready'
@@ -397,12 +397,6 @@ export const TimelineItem = memo(
       !isBroken &&
       (item.type === 'video' || (item.type === 'audio' && linkedVideoCaptionOwner === null))
 
-    const mediaForItem = useMediaLibraryStore(
-      useCallback(
-        (s) => (item.mediaId ? (s.mediaItems.find((m) => m.id === item.mediaId) ?? null) : null),
-        [item.mediaId],
-      ),
-    )
     const canExtractEmbeddedSubtitles = !!(
       mediaForItem &&
       !isBroken &&
@@ -513,27 +507,29 @@ export const TimelineItem = memo(
     const rollHoverEdge = useRollHoverStore(
       useCallback((s) => (s.neighborItemId === item.id ? s.neighborEdge : null), [item.id]),
     )
-    const isSingleEffectDropTarget = useEffectDropPreviewStore(
-      useCallback(
-        (state) => state.targetItemIds.length === 1 && state.targetItemIds[0] === item.id,
-        [item.id],
+    // Single shallow read replaces three subscriptions on the same store.
+    const effectDropPreview = useEffectDropPreviewStore(
+      useShallow(
+        useCallback(
+          (state) => {
+            const targets = state.targetItemIds
+            const isTarget = targets.includes(item.id)
+            const isSingle = targets.length === 1 && targets[0] === item.id
+            const isMulti = isTarget && targets.length > 1
+            return {
+              isSingle,
+              isMulti,
+              hoveredMultiCount:
+                state.hoveredItemId === item.id && targets.length > 1 ? targets.length : 0,
+            }
+          },
+          [item.id],
+        ),
       ),
     )
-    const isMultiEffectDropTarget = useEffectDropPreviewStore(
-      useCallback(
-        (state) => state.targetItemIds.length > 1 && state.targetItemIds.includes(item.id),
-        [item.id],
-      ),
-    )
-    const multiEffectDropTargetCount = useEffectDropPreviewStore(
-      useCallback(
-        (state) =>
-          state.hoveredItemId === item.id && state.targetItemIds.length > 1
-            ? state.targetItemIds.length
-            : 0,
-        [item.id],
-      ),
-    )
+    const isSingleEffectDropTarget = effectDropPreview.isSingle
+    const isMultiEffectDropTarget = effectDropPreview.isMulti
+    const multiEffectDropTargetCount = effectDropPreview.hoveredMultiCount
     const isEffectDropTarget = isSingleEffectDropTarget || isMultiEffectDropTarget
 
     // Track which edge was closer when context menu was triggered
@@ -784,28 +780,26 @@ export const TimelineItem = memo(
       ),
     )
 
-    // Rolling edit preview: this item is the neighbor being inversely adjusted
-    const rollingEditDelta = useRollingEditPreviewStore(
-      useCallback(
-        (s) => {
-          if (s.neighborItemId !== item.id) return 0
-          return s.neighborDelta
-        },
-        [item.id],
+    // Rolling edit preview: this item is the neighbor being inversely adjusted.
+    // Single shallow read avoids three subscriptions firing on every drag frame.
+    const rollingEditPreview = useRollingEditPreviewStore(
+      useShallow(
+        useCallback(
+          (s) => {
+            const isNeighbor = s.neighborItemId === item.id
+            return {
+              delta: isNeighbor ? s.neighborDelta : 0,
+              handle: isNeighbor ? s.handle : null,
+              constrained: isNeighbor && s.constrained,
+            }
+          },
+          [item.id],
+        ),
       ),
     )
-    const rollingEditHandle = useRollingEditPreviewStore(
-      useCallback(
-        (s) => {
-          if (s.neighborItemId !== item.id) return null
-          return s.handle
-        },
-        [item.id],
-      ),
-    )
-    const rollingEditConstrained = useRollingEditPreviewStore(
-      useCallback((s) => s.neighborItemId === item.id && s.constrained, [item.id]),
-    )
+    const rollingEditDelta = rollingEditPreview.delta
+    const rollingEditHandle = rollingEditPreview.handle
+    const rollingEditConstrained = rollingEditPreview.constrained
 
     // Ripple edit preview: downstream items shift by delta during ripple trim
     const rippleEditOffset = useRippleEditPreviewStore(
@@ -866,80 +860,66 @@ export const TimelineItem = memo(
       linkedEditPreviewUpdate !== null &&
       linkedEditPreviewUpdate.sourceStart !== undefined
 
+    // Single shallow read covers slide preview role + range. Previously this
+    // store was subscribed to seven times per timeline item; useShallow returns
+    // a stable object so React still re-renders only when one of the fields
+    // changes.
+    const slidePreview = useSlideEditPreviewStore(
+      useShallow(
+        useCallback(
+          (s) => ({
+            activeItemId: s.itemId,
+            primaryLeftNeighborId: s.itemId === item.id ? s.leftNeighborId : null,
+            primaryRightNeighborId: s.itemId === item.id ? s.rightNeighborId : null,
+            slideDelta: s.slideDelta,
+            minDelta: s.minDelta,
+            maxDelta: s.maxDelta,
+            isPrimary: s.itemId === item.id,
+            isLeftNeighbor: s.leftNeighborId === item.id,
+            isRightNeighbor: s.rightNeighborId === item.id,
+          }),
+          [item.id],
+        ),
+      ),
+    )
+
+    const slideEditOffset = slidePreview.isPrimary ? slidePreview.slideDelta : 0
+    const slideNeighborDelta =
+      slidePreview.isLeftNeighbor || slidePreview.isRightNeighbor ? slidePreview.slideDelta : 0
+    const slideNeighborSide: 'left' | 'right' | null = slidePreview.isLeftNeighbor
+      ? 'left'
+      : slidePreview.isRightNeighbor
+        ? 'right'
+        : null
+
     // Linked slide companion: true ONLY when this item is the direct linked
     // companion of the slid clip (not a counterpart of a neighbor).
-    // Verified by checking that this item is linked to the slid clip.
-    const isLinkedSlideCompanion = useSlideEditPreviewStore(
-      useCallback(
-        (s) => {
-          if (!s.itemId || s.itemId === item.id) return false
-          if (s.leftNeighborId === item.id || s.rightNeighborId === item.id) return false
-          // Must actually be linked to the slid clip
-          const items = useItemsStore.getState().items
-          const linkedIds = getLinkedItemIds(items, s.itemId)
-          return linkedIds.includes(item.id)
-        },
-        [item.id],
-      ),
+    // Reads items store non-reactively — re-evaluates when slidePreview changes.
+    const isLinkedSlideCompanion = useMemo(() => {
+      if (!slidePreview.activeItemId || slidePreview.isPrimary) return false
+      if (slidePreview.isLeftNeighbor || slidePreview.isRightNeighbor) return false
+      const items = useItemsStore.getState().items
+      const linkedIds = getLinkedItemIds(items, slidePreview.activeItemId)
+      return linkedIds.includes(item.id)
+    }, [
+      item.id,
+      slidePreview.activeItemId,
+      slidePreview.isPrimary,
+      slidePreview.isLeftNeighbor,
+      slidePreview.isRightNeighbor,
+    ])
+
+    // Stable reference so downstream useMemo deps don't churn.
+    const slideRange = useMemo(
+      () =>
+        slidePreview.activeItemId !== null
+          ? { minDelta: slidePreview.minDelta, maxDelta: slidePreview.maxDelta }
+          : null,
+      [slidePreview.activeItemId, slidePreview.minDelta, slidePreview.maxDelta],
     )
 
-    // Slide edit preview: real-time visual offsets during slide drag.
-    // - Slid clip: position shifts by slideDelta
-    // - Left neighbor: end extends/shrinks by slideDelta (width change only)
-    // - Right neighbor: start extends/shrinks by slideDelta (position + width change)
-    const slideEditOffset = useSlideEditPreviewStore(
-      useCallback(
-        (s) => {
-          if (!s.itemId) return 0
-          if (s.itemId === item.id) return s.slideDelta
-          return 0
-        },
-        [item.id],
-      ),
-    )
-
-    const slideNeighborDelta = useSlideEditPreviewStore(
-      useCallback(
-        (s) => {
-          if (!s.itemId) return 0
-          // Left neighbor: end edge moves by slideDelta
-          if (s.leftNeighborId === item.id) return s.slideDelta
-          // Right neighbor: start edge moves by slideDelta
-          if (s.rightNeighborId === item.id) return s.slideDelta
-          return 0
-        },
-        [item.id],
-      ),
-    )
-
-    const slideNeighborSide = useSlideEditPreviewStore(
-      useCallback(
-        (s): 'left' | 'right' | null => {
-          if (!s.itemId) return null
-          if (s.leftNeighborId === item.id) return 'left'
-          if (s.rightNeighborId === item.id) return 'right'
-          return null
-        },
-        [item.id],
-      ),
-    )
-
-    // Slide range from the preview store - the tightest constraint across all tracks.
-    // Used by both primary and companion overlays so limit boxes match.
-    const slideRange = useSlideEditPreviewStore(
-      useShallow(
-        useCallback((s) => (s.itemId ? { minDelta: s.minDelta, maxDelta: s.maxDelta } : null), []),
-      ),
-    )
-
-    // For the actively slid item, read neighbor IDs from preview store so we can
-    // mirror commit-time source continuity logic in filmstrip/waveform preview.
-    const slideLeftNeighborIdForSlidItem = useSlideEditPreviewStore(
-      useCallback((s) => (s.itemId === item.id ? s.leftNeighborId : null), [item.id]),
-    )
-    const slideRightNeighborIdForSlidItem = useSlideEditPreviewStore(
-      useCallback((s) => (s.itemId === item.id ? s.rightNeighborId : null), [item.id]),
-    )
+    const slideLeftNeighborIdForSlidItem = slidePreview.primaryLeftNeighborId
+    const slideRightNeighborIdForSlidItem = slidePreview.primaryRightNeighborId
     const slideLeftNeighborForSlidItem = useItemsStore(
       useCallback(
         (s) => {
