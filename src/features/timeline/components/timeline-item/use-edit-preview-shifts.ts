@@ -175,17 +175,23 @@ export function useEditPreviewShifts({
   const slidePreview = useSlideEditPreviewStore(
     useShallow(
       useCallback(
-        (s): SlidePreview => ({
-          activeItemId: s.itemId,
-          primaryLeftNeighborId: s.itemId === item.id ? s.leftNeighborId : null,
-          primaryRightNeighborId: s.itemId === item.id ? s.rightNeighborId : null,
-          slideDelta: s.slideDelta,
-          minDelta: s.minDelta,
-          maxDelta: s.maxDelta,
-          isPrimary: s.itemId === item.id,
-          isLeftNeighbor: s.leftNeighborId === item.id,
-          isRightNeighbor: s.rightNeighborId === item.id,
-        }),
+        (s): SlidePreview => {
+          const isPrimary = s.itemId === item.id
+          const isLeftNeighbor = s.leftNeighborId === item.id
+          const isRightNeighbor = s.rightNeighborId === item.id
+          const isRelated = isPrimary || isLeftNeighbor || isRightNeighbor
+          return {
+            activeItemId: s.itemId,
+            primaryLeftNeighborId: isPrimary ? s.leftNeighborId : null,
+            primaryRightNeighborId: isPrimary ? s.rightNeighborId : null,
+            slideDelta: isRelated ? s.slideDelta : 0,
+            minDelta: s.minDelta,
+            maxDelta: s.maxDelta,
+            isPrimary,
+            isLeftNeighbor,
+            isRightNeighbor,
+          }
+        },
         [item.id],
       ),
     ),

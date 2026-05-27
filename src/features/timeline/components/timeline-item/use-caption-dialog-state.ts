@@ -217,7 +217,7 @@ export function useCaptionDialogState({
 
   return {
     canManageCaptions,
-    canExtractEmbeddedSubtitles: canManageCaptions && canExtractEmbeddedSubtitles,
+    canExtractEmbeddedSubtitles,
     hasConsolidatablePerCueCaptions,
     mediaHasTranscript,
     transcriptStatus,

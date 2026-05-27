@@ -22,15 +22,9 @@ export function useElementSize(
   const [size, setSize] = useState<ElementSize>({ width: 0, height: 0 })
 
   useEffect(() => {
-    if (!enabled) {
-      setSize({ width: 0, height: 0 })
-      return
-    }
+    if (!enabled) return
     const node = ref.current
-    if (!node) {
-      setSize({ width: 0, height: 0 })
-      return
-    }
+    if (!node) return
 
     const update = () => {
       setSize({ width: node.clientWidth, height: node.clientHeight })
