@@ -10,6 +10,7 @@
 
 import { useSelectionStore } from '@/shared/state/selection'
 import { createLogger } from '@/shared/logging/logger'
+import { DEFAULT_PROJECT_HEIGHT, DEFAULT_PROJECT_WIDTH } from '@/shared/projects/defaults'
 import type { MediaCaption } from '@/infrastructure/analysis'
 import type { AudioItem, TextItem, TimelineItem, TimelineTrack, VideoItem } from '@/types/timeline'
 import {
@@ -93,8 +94,8 @@ class MediaCaptioningService {
       return { insertedItemCount: 0, removedItemCount: 0, noTargetClips: true }
     }
 
-    const canvasWidth = project?.metadata.width ?? 1920
-    const canvasHeight = project?.metadata.height ?? 1080
+    const canvasWidth = project?.metadata.width ?? DEFAULT_PROJECT_WIDTH
+    const canvasHeight = project?.metadata.height ?? DEFAULT_PROJECT_HEIGHT
     const newTracks: TimelineTrack[] = [...timeline.tracks]
     const generatedCaptionIdsToRemove = options.replaceExisting
       ? new Set(

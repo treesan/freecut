@@ -35,6 +35,7 @@ import {
 import type { ExportSettings, ExportMode } from '@/types/export'
 import { useClientRender } from '../hooks/use-client-render'
 import { useProjectStore } from '@/features/export/deps/projects'
+import { DEFAULT_PROJECT_HEIGHT, DEFAULT_PROJECT_WIDTH } from '@/shared/projects/defaults'
 import { useTimelineStore } from '@/features/export/deps/timeline'
 import { formatTimecode, framesToSeconds } from '@/shared/utils/time-utils'
 import {
@@ -126,8 +127,12 @@ function getDefaultCodecForFormat(format: 'mp4' | 'webm'): ExportSettings['codec
 
 export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const { t } = useTranslation()
-  const projectWidth = useProjectStore((s) => s.currentProject?.metadata.width ?? 1920)
-  const projectHeight = useProjectStore((s) => s.currentProject?.metadata.height ?? 1080)
+  const projectWidth = useProjectStore(
+    (s) => s.currentProject?.metadata.width ?? DEFAULT_PROJECT_WIDTH,
+  )
+  const projectHeight = useProjectStore(
+    (s) => s.currentProject?.metadata.height ?? DEFAULT_PROJECT_HEIGHT,
+  )
   // Timeline state for in/out points and duration calculation
   const fps = useTimelineStore((s) => s.fps)
   const items = useTimelineStore((s) => s.items)

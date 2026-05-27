@@ -18,6 +18,7 @@ import { execute, applyTransitionRepairs, getLogger } from './shared'
 import { resolveSourceEditTrackTargets } from '../../utils/source-edit-targeting'
 import { buildMediaTimelineItems } from '../../utils/media-timeline-item-builder'
 import { DEFAULT_TRACK_HEIGHT } from '../../constants'
+import { DEFAULT_PROJECT_HEIGHT, DEFAULT_PROJECT_WIDTH } from '@/shared/projects/defaults'
 
 interface SourceEditContext {
   sourceMediaId: string
@@ -103,8 +104,8 @@ async function resolveSourceEditContext(): Promise<SourceEditContext | null> {
   const insertFrame = usePlaybackStore.getState().currentFrame
 
   const currentProject = useProjectStore.getState().currentProject
-  const canvasWidth = currentProject?.metadata.width ?? 1920
-  const canvasHeight = currentProject?.metadata.height ?? 1080
+  const canvasWidth = currentProject?.metadata.width ?? DEFAULT_PROJECT_WIDTH
+  const canvasHeight = currentProject?.metadata.height ?? DEFAULT_PROJECT_HEIGHT
   const hasAudio = mediaType === 'video' && !!media.audioCodec
   const resolvedTargets = resolveSourceEditTrackTargets({
     tracks,

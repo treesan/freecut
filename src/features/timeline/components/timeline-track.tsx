@@ -23,6 +23,7 @@ import { useCompositionsStore } from '../stores/compositions-store'
 import { useSelectionStore } from '@/shared/state/selection'
 import { useMediaLibraryStore } from '@/features/timeline/deps/media-library-store'
 import { useProjectStore } from '@/features/timeline/deps/projects'
+import { DEFAULT_PROJECT_HEIGHT, DEFAULT_PROJECT_WIDTH } from '@/shared/projects/defaults'
 import { mediaLibraryService } from '@/features/timeline/deps/media-library-service'
 import {
   resolveMediaUrl,
@@ -334,8 +335,8 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
   const getCurrentCanvasSize = useCallback(() => {
     const liveProject = useProjectStore.getState().currentProject
     return {
-      width: liveProject?.metadata.width ?? 1920,
-      height: liveProject?.metadata.height ?? 1080,
+      width: liveProject?.metadata.width ?? DEFAULT_PROJECT_WIDTH,
+      height: liveProject?.metadata.height ?? DEFAULT_PROJECT_HEIGHT,
     }
   }, [])
 
