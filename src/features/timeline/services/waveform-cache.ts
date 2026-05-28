@@ -121,6 +121,12 @@ class WaveformCacheService {
   private memoryCache = new SizedAccessedMemoryCache<CachedWaveform>(MAX_CACHE_SIZE_BYTES)
   private levelCache = new SizedAccessedMemoryCache<CachedWaveformLevel>(MAX_LEVEL_CACHE_SIZE_BYTES)
   private pendingLevelRequests = new Map<string, Promise<CachedWaveformLevel | null>>()
+  // Generation tokens guard against clearMedia/clearAll racing with an in-flight
+  // getDisplayLevel: the async OPFS read captures the token at the start and
+  // drops its cache insert if the token moved on, so a late completion can't
+  // resurrect a just-cleared level.
+  private levelMediaGeneration = new Map<string, number>()
+  private levelGlobalGeneration = 0
   private pendingRequests = new Map<string, PendingRequest>()
   private updateCallbacks = new Map<string, Set<WaveformUpdateCallback>>()
   private workerRequestId = 0
@@ -275,6 +281,10 @@ class WaveformCacheService {
     return `${mediaId}:${levelIndex}`
   }
 
+  private currentLevelToken(mediaId: string): string {
+    return `${this.levelGlobalGeneration}:${this.levelMediaGeneration.get(mediaId) ?? 0}`
+  }
+
   /**
    * Synchronously read a cached display level. Lets a remounting clip render
    * immediately (no skeleton) when the level was already loaded this session.
@@ -304,9 +314,14 @@ class WaveformCacheService {
     const inFlight = this.pendingLevelRequests.get(key)
     if (inFlight) return inFlight
 
+    const tokenAtStart = this.currentLevelToken(mediaId)
     const request = (async (): Promise<CachedWaveformLevel | null> => {
       const level = await waveformOPFSStorage.getLevel(mediaId, levelIndex)
       if (!level) return null
+
+      // If clearMedia/clearAll ran while we were reading OPFS, drop the result —
+      // re-inserting it would resurrect a just-cleared level.
+      if (this.currentLevelToken(mediaId) !== tokenAtStart) return null
 
       const floatsPerSample = level.channels >= 2 ? 2 : 1
       const sampleCount = level.peaks.length / floatsPerSample
@@ -1241,6 +1256,10 @@ class WaveformCacheService {
    * Clear waveform for a media item from all caches
    */
   async clearMedia(mediaId: string): Promise<void> {
+    // Bump the token first so an in-flight getDisplayLevel can't re-insert a
+    // stale level after the deletes below.
+    this.levelMediaGeneration.set(mediaId, (this.levelMediaGeneration.get(mediaId) ?? 0) + 1)
+
     // Clear from memory cache (full-res and all display levels)
     this.memoryCache.delete(mediaId)
     for (let levelIndex = 0; levelIndex < WAVEFORM_LEVELS.length; levelIndex++) {
@@ -1259,6 +1278,10 @@ class WaveformCacheService {
    * Clear all cached waveforms
    */
   clearAll(): void {
+    // Invalidate every in-flight getDisplayLevel so a late OPFS completion can't
+    // re-insert a level we just cleared.
+    this.levelGlobalGeneration += 1
+    this.levelMediaGeneration.clear()
     this.memoryCache.clear()
     this.levelCache.clear()
   }

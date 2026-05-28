@@ -147,12 +147,12 @@ export function useWaveform({
       .getDisplayLevel(mediaId, levelIndex)
       .then((level) => {
         if (cancelled || lastMediaIdRef.current !== requestMediaId) return
-        if (level) {
-          setDisplayLevel(level)
-        }
-        // Mark probed regardless: a null result means no persisted level, so
-        // the generation effect should take over. Keep any previously-shown
-        // level on null so a transient miss doesn't blank the clip.
+        // A null result means this zoom's level isn't persisted: clear any
+        // previously-shown (now stale) level so `needsFullRes` flips true and
+        // the full-resolution generation path takes over. Leaving a stale
+        // coarser level in place would keep `needsFullRes` false forever and
+        // permanently strand the clip on the wrong level's peaks.
+        setDisplayLevel(level)
         setLevelProbed(true)
       })
       .catch((err) => {
