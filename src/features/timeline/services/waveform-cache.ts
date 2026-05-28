@@ -37,8 +37,15 @@ import {
 
 const logger = createLogger('WaveformCache')
 
-// Memory cache configuration
-const MAX_CACHE_SIZE_BYTES = 20 * 1024 * 1024 // 20MB
+// Memory cache configuration.
+// 20MB was too small to hold a single long clip's full-resolution peaks
+// (1000 samples/sec stereo ≈ 28.8MB/hour), so SizedAccessedMemoryCache rejected
+// them outright (oversized items are never cached). That forced an async OPFS
+// reload — and a loading-skeleton flash — on every mount/remount, e.g. when a
+// clip is dragged to another track (which remounts it under a new track row).
+// 128MB holds several hours of stereo waveform so realistic long clips stay
+// resident and remounts hit the sync cache instead of reloading.
+const MAX_CACHE_SIZE_BYTES = 128 * 1024 * 1024 // 128MB
 const MAX_CONCURRENT_WAVEFORM_GENERATIONS = 1
 const WAVEFORM_PROGRESS_NOTIFY_INTERVAL_MS = 120
 const WAVEFORM_PROGRESS_NOTIFY_STEP = 2
