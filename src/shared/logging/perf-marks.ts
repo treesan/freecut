@@ -52,9 +52,16 @@ export function perfMeasure(name: string, startMark: string, endMark?: string): 
 /**
  * Measure the synchronous duration of `fn` under `name`. Shows up as a
  * single labeled entry on the User Timing track.
+ *
+ * Opt-in: records only when `window.__TL_PERF__` is truthy. Each call leaves a
+ * `performance.measure` entry in the buffer (the marks are cleared, the measure
+ * is not — that's what `__DEBUG__.perfSummary()` reads), so leaving it always-on
+ * grows the User Timing buffer unbounded over a session. Gating it (like
+ * `perfMarkRender`) keeps normal use zero-overhead; enable before profiling:
+ * `window.__TL_PERF__ = true`.
  */
 export function withPerfMeasure<T>(name: string, fn: () => T): T {
-  if (!HAS_PERF) return fn()
+  if (!HAS_PERF || !(globalThis as { __TL_PERF__?: boolean }).__TL_PERF__) return fn()
   const startMark = `${name}:s`
   const endMark = `${name}:e`
   try {

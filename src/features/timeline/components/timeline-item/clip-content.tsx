@@ -191,6 +191,13 @@ export const ClipContent = memo(function ClipContent({
   const [deferVisual, setDeferVisual] = useState(() => useZoomStore.getState().isZoomInteracting)
   useEffect(() => {
     if (!deferVisual) return
+    // The gesture may have settled between the mount-time getState() read and
+    // this effect attaching. The subscription only fires on *future* changes, so
+    // without this re-check the clip would stay shell-only until the next zoom.
+    if (!useZoomStore.getState().isZoomInteracting) {
+      setDeferVisual(false)
+      return
+    }
     return useZoomStore.subscribe((state) => {
       if (!state.isZoomInteracting) setDeferVisual(false)
     })
