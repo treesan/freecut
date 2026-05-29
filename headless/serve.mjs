@@ -25,7 +25,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { loadProject, listProjects, readMediaMetadata } from './lib/workspace.mjs'
-import { GPU_ARGS, prepareJob, renderJob, startHarness } from './lib/render-core.mjs'
+import { chromeLaunchArgs, prepareJob, renderJob, startHarness } from './lib/render-core.mjs'
 
 const CONTAINER_MIME = {
   mp4: 'video/mp4',
@@ -89,7 +89,11 @@ async function main() {
     build: args.build,
   })
 
-  const browser = await chromium.launch({ channel: 'chrome', headless: !args.head, args: GPU_ARGS })
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    headless: !args.head,
+    args: chromeLaunchArgs(),
+  })
   const context = await browser.newContext({ acceptDownloads: true })
   const page = await context.newPage()
   page.on('pageerror', (e) => console.error('[pageerror]', e.message))
@@ -158,7 +162,14 @@ async function main() {
     const route = `${req.method} ${url.pathname}`
     const handler =
       route === 'GET /health'
-        ? async () => sendJson(res, 200, { ok: true, harnessUrl })
+        ? async () => {
+            const gpu = await page
+              .evaluate(async () =>
+                Boolean(globalThis.navigator?.gpu && (await navigator.gpu.requestAdapter())),
+              )
+              .catch(() => false)
+            sendJson(res, 200, { ok: true, gpu, harnessUrl })
+          }
         : route === 'GET /projects'
           ? async () => sendJson(res, 200, listProjects(workspace))
           : route === 'POST /render'

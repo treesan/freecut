@@ -11,12 +11,23 @@ import { createHarnessServer } from '../server.mjs'
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-export const GPU_ARGS = [
-  '--enable-unsafe-webgpu',
-  '--enable-features=Vulkan',
-  '--ignore-gpu-blocklist',
-  '--use-angle=d3d11',
-]
+/**
+ * Chrome launch args for headless WebGPU, per platform. The ANGLE backend is
+ * platform-specific (d3d11 on Windows, metal on macOS, vulkan on Linux). Extra
+ * args can be appended via FREECUT_CHROME_ARGS (space-separated) — e.g. in
+ * Docker: "--no-sandbox --use-vulkan=swiftshader" for software WebGPU.
+ */
+export function chromeLaunchArgs() {
+  const angle =
+    process.platform === 'win32'
+      ? '--use-angle=d3d11'
+      : process.platform === 'darwin'
+        ? '--use-angle=metal'
+        : '--use-angle=vulkan'
+  const base = ['--enable-unsafe-webgpu', '--enable-features=Vulkan', '--ignore-gpu-blocklist', angle]
+  const extra = (process.env.FREECUT_CHROME_ARGS ?? '').split(/\s+/).filter(Boolean)
+  return [...base, ...extra]
+}
 
 const CODEC_MAP = { h264: 'avc', avc: 'avc', h265: 'hevc', hevc: 'hevc', vp9: 'vp9', vp8: 'vp8', av1: 'av1' }
 const DEFAULT_CONTAINER = { avc: 'mp4', hevc: 'mp4', vp9: 'webm', vp8: 'webm', av1: 'webm' }

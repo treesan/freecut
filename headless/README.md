@@ -188,6 +188,32 @@ curl -X POST localhost:8787/edit -H 'content-type: application/json' \
 `project` is a workspace project id; `projectObject` is an inline Project JSON.
 Media is resolved from the service's workspace by id.
 
+## Docker
+
+Run the render service in a container (Google Chrome for H.264/AAC + Mesa
+lavapipe for software WebGPU):
+
+```bash
+# Build (context = repo root)
+docker build -f headless/Dockerfile -t freecut-headless .
+
+# Run, mounting your workspace read-only
+docker run --rm -p 8787:8787 -v /path/to/FreeCutProjects:/workspace:ro freecut-headless
+
+# Verify — gpu:true means WebGPU (effects) works in the container
+curl localhost:8787/health
+curl -X POST localhost:8787/render -H 'content-type: application/json' \
+  -d '{"project":"<id>","duration":5}' -o out.mp4
+```
+
+**GPU note (honest):** WebGPU runs in software via lavapipe, which works but is
+slow, and software-WebGPU support varies by Chrome/Mesa version. The render
+fails loudly (the WebGPU-presence check) if a project uses effects and WebGPU
+didn't initialize — check `/health` returns `"gpu":true`. For full-speed effects
+use a GPU host: install the NVIDIA Container Toolkit, drop `VK_ICD_FILENAMES`,
+and run with `--gpus all`. Effect-free projects (cuts, text, transitions) don't
+need WebGPU.
+
 ## Dev/regression scripts
 
 - `node headless/probe.mjs` — report WebGPU + WebCodecs support in headless Chrome.

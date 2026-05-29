@@ -11,14 +11,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { createHarnessServer } from './server.mjs'
+import { chromeLaunchArgs } from './lib/render-core.mjs'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const GPU_ARGS = [
-  '--enable-unsafe-webgpu',
-  '--enable-features=Vulkan',
-  '--ignore-gpu-blocklist',
-  '--use-angle=d3d11',
-]
 
 // A zero-media text title — no effects/transitions, so it renders without WebGPU.
 const TEXT_TIMELINE = {
@@ -133,7 +128,7 @@ async function main() {
   }
 
   const server = await createHarnessServer({ distDir })
-  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: GPU_ARGS })
+  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: chromeLaunchArgs() })
   try {
     const context = await browser.newContext({ acceptDownloads: true })
     const page = await context.newPage()

@@ -31,7 +31,7 @@
 import { chromium } from 'playwright'
 import fs from 'node:fs'
 import { listProjects } from './lib/workspace.mjs'
-import { GPU_ARGS, prepareJob, renderJob, startHarness } from './lib/render-core.mjs'
+import { chromeLaunchArgs, prepareJob, renderJob, startHarness } from './lib/render-core.mjs'
 
 function parseArgs(argv) {
   const args = { _: [] }
@@ -91,7 +91,11 @@ async function main() {
   })
   console.log(`Harness: ${harnessUrl}`)
 
-  const browser = await chromium.launch({ channel: 'chrome', headless: !args.head, args: GPU_ARGS })
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    headless: !args.head,
+    args: chromeLaunchArgs(),
+  })
   try {
     const context = await browser.newContext({ acceptDownloads: true })
     const page = await context.newPage()
