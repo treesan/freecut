@@ -101,6 +101,34 @@ export interface HeadlessRenderSummary {
   fileSize: number
   durationSeconds: number
   fileName: string
+  /** Non-fatal issues (e.g. audio codec not encodable here, so audio was omitted). */
+  warnings: string[]
+}
+
+/**
+ * Whether this browser can encode the given audio codec. mp3 (mediabunny WASM)
+ * and PCM need no WebCodecs encoder; aac/opus go through AudioEncoder — and
+ * Linux Chrome notably lacks an AAC encoder, which would otherwise silently
+ * drop audio from mp4 output.
+ */
+async function audioEncodable(
+  audioCodec: string | undefined,
+  sampleRate = 48000,
+): Promise<boolean> {
+  if (!audioCodec || audioCodec === 'mp3' || audioCodec.startsWith('pcm')) return true
+  if (typeof AudioEncoder === 'undefined') return false
+  const codec = audioCodec === 'aac' ? 'mp4a.40.2' : audioCodec
+  try {
+    const support = await AudioEncoder.isConfigSupported({
+      codec,
+      sampleRate,
+      numberOfChannels: 2,
+      bitrate: 192_000,
+    })
+    return Boolean(support.supported)
+  } catch {
+    return false
+  }
 }
 
 type ProgressSink = (progress: RenderProgress) => void
@@ -286,6 +314,19 @@ async function renderTimeline(input: HeadlessTimelineInput): Promise<HeadlessRen
 
   await adaptVideoSettings(settings)
 
+  const warnings: string[] = []
+  if (
+    settings.mode === 'video' &&
+    !(await audioEncodable(settings.audioCodec, settings.sampleRate))
+  ) {
+    const msg =
+      `Audio codec "${settings.audioCodec}" cannot be encoded in this environment; any audio will be omitted. ` +
+      `Use vp9/webm (Opus) for audio here, or render on a platform with an ${(settings.audioCodec ?? '').toUpperCase()} encoder ` +
+      `(Linux Chrome has no AAC encoder).`
+    warnings.push(msg)
+    log.warn(msg)
+  }
+
   const composition: CompositionInputProps = convertTimelineToComposition(
     tracks,
     items,
@@ -328,6 +369,7 @@ async function renderTimeline(input: HeadlessTimelineInput): Promise<HeadlessRen
     fileSize: result.fileSize,
     durationSeconds: result.duration,
     fileName,
+    warnings,
   }
 }
 

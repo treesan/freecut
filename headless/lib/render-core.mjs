@@ -196,5 +196,6 @@ export async function renderJob(page, job, { setProgressLabel, onWarn } = {}) {
   })
   const download = await downloadPromise
   await download.saveAs(job.outPath)
+  for (const w of summary.warnings ?? []) warn(`  WARNING: ${w}`)
   return summary
 }

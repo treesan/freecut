@@ -206,13 +206,25 @@ curl -X POST localhost:8787/render -H 'content-type: application/json' \
   -d '{"project":"<id>","duration":5}' -o out.mp4
 ```
 
-**GPU note (honest):** WebGPU runs in software via lavapipe, which works but is
-slow, and software-WebGPU support varies by Chrome/Mesa version. The render
-fails loudly (the WebGPU-presence check) if a project uses effects and WebGPU
-didn't initialize — check `/health` returns `"gpu":true`. For full-speed effects
-use a GPU host: install the NVIDIA Container Toolkit, drop `VK_ICD_FILENAMES`,
-and run with `--gpus all`. Effect-free projects (cuts, text, transitions) don't
-need WebGPU.
+### Docker: what works (tested) and what to know
+
+Verified in-container against a real workspace:
+
+- **Builds and serves**; `/health` reports `"gpu":true` (software WebGPU via lavapipe).
+- **Renders work** for video, **text (gpu-text), and transitions** — all GPU-via-lavapipe.
+- **Use VP9/WebM (Opus) or audio-only MP3 for audio.** Linux Google Chrome has
+  **no WebCodecs AAC encoder**, so MP4/AAC output renders **video only** (audio
+  omitted). The render now prints a clear warning and sets an `X-Freecut-Warnings`
+  response header instead of silently dropping it. AAC works on Windows/macOS hosts.
+- **Heavy GPU effects can fail** under software WebGPU (lavapipe) with a Dawn
+  device-loss error — the render returns a clear error (not a silent bad output).
+  For reliable, full-speed effects use a **GPU host**: install the NVIDIA Container
+  Toolkit, drop `VK_ICD_FILENAMES` (so the real GPU is used), and run with
+  `--gpus all`.
+
+So: containerized rendering is solid for cuts/text/transitions with WebM/Opus
+audio; for AAC and heavy GPU effects, render on a host with the OS AAC encoder
+and/or a real GPU.
 
 ## Dev/regression scripts
 

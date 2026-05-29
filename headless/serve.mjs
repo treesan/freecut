@@ -136,6 +136,11 @@ async function main() {
       'Content-Type': CONTAINER_MIME[job.settings.container] ?? 'application/octet-stream',
       'Content-Length': fs.statSync(finalOut).size,
       'Content-Disposition': `attachment; filename="${path.basename(finalOut)}"`,
+      // Header values must be ASCII; sanitize defensively so a warning never
+      // turns a successful render into a 500.
+      ...(summary.warnings?.length
+        ? { 'X-Freecut-Warnings': JSON.stringify(summary.warnings).replace(/[^\t\x20-\x7E]/g, ' ') }
+        : {}),
     })
     const stream = fs.createReadStream(finalOut)
     stream.pipe(res)
