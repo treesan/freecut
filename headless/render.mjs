@@ -31,7 +31,13 @@ import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
-import { loadProject, listProjects, collectMediaIds, resolveMediaFiles } from './lib/workspace.mjs'
+import {
+  loadProject,
+  listProjects,
+  collectMediaIds,
+  resolveMediaFiles,
+  readMediaMetadata,
+} from './lib/workspace.mjs'
 import { createMediaServer } from './media-server.mjs'
 import { createHarnessServer } from './server.mjs'
 
@@ -230,8 +236,23 @@ async function main() {
   // Dev mode (--harness-url): drive a running Vite dev server + a cross-origin
   // media server.
   const { harnessUrl, mediaUrlOf, closeServers } = await startServers(args, files)
-  const media = [...files.keys()].map((mediaId) => ({ mediaId, url: mediaUrlOf(mediaId) }))
+  const media = [...files.keys()].map((mediaId) => ({
+    mediaId,
+    url: mediaUrlOf(mediaId),
+    metadata: readMediaMetadata(workspace, mediaId) ?? undefined,
+  }))
   console.log(`Harness: ${harnessUrl}`)
+
+  // Warn about audio codecs that aren't decodable headlessly. AC-3/E-AC-3 ARE
+  // (via @mediabunny/ac3, marked audioCodecSupported:true); a false flag means
+  // something exotic like DTS — its audio will be silent in the render.
+  const unsupportedAudio = media.filter((m) => m.metadata?.audioCodecSupported === false)
+  if (unsupportedAudio.length > 0) {
+    const list = unsupportedAudio
+      .map((m) => `${m.metadata.fileName ?? m.mediaId} (${m.metadata.audioCodec ?? 'unknown'})`)
+      .join(', ')
+    console.warn(`WARNING: audio codec not decodable headlessly — audio may be silent for: ${list}`)
+  }
 
   const outName = `${(project.name ?? 'freecut-export').replace(/[^\w.-]+/g, '_')}.${settings.container}`
   const outPath = path.resolve(args.out ?? path.join('headless', 'output', outName))

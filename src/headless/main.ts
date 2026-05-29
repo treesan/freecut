@@ -21,6 +21,7 @@ import type { Transition } from '@/types/transition'
 import type { ItemKeyframes } from '@/types/keyframe'
 import type { AudioEqSettings } from '@/types/audio'
 import type { CompositionInputProps } from '@/types/export'
+import type { MediaMetadata } from '@/types/storage'
 
 import { createLogger } from '@/shared/logging/logger'
 import { migrateProject } from '@/shared/projects/migrations'
@@ -39,6 +40,7 @@ import type { ClientVideoContainer } from '@/features/export/utils/client-render
 import { resolveMediaUrls } from '@/features/media-library/utils/media-resolver'
 import { blobUrlManager } from '@/infrastructure/browser/blob-url-manager'
 import { useCompositionsStore, type SubComposition } from '@/features/export/deps/timeline'
+import { useMediaLibraryStore } from '@/features/media-library/stores/media-library-store'
 import { editProject } from './edit'
 
 const log = createLogger('Headless')
@@ -47,6 +49,12 @@ export interface HeadlessMediaSource {
   mediaId: string
   /** Same-origin (or CORS+CORP) URL the harness can fetch the full media bytes from. */
   url: string
+  /**
+   * The media's MediaMetadata (from the workspace `media/<id>/metadata.json`).
+   * Seeded into the media-library store so codec lookups work — notably so
+   * AC-3/E-AC-3 audio triggers the @mediabunny/ac3 decoder during export.
+   */
+  metadata?: MediaMetadata
 }
 
 /** Render from already-extracted timeline data (no Project schema required). */
@@ -118,6 +126,23 @@ function registerMediaUrls(media: HeadlessMediaSource[] | undefined): void {
     if (blobUrlManager.get(mediaId)) continue
     blobUrlManager.registerUrl(mediaId, url)
   }
+}
+
+/**
+ * Seed the media-library store with provided MediaMetadata so codec lookups
+ * (getMediaAudioCodecById) and source-fps conversions resolve. Without this the
+ * export audio path can't tell that a clip is AC-3/E-AC-3 and skips registering
+ * the @mediabunny/ac3 decoder, dropping that audio.
+ */
+function seedMediaLibrary(media: HeadlessMediaSource[] | undefined): void {
+  const metadatas = (media ?? [])
+    .map((m) => m.metadata)
+    .filter((m): m is MediaMetadata => Boolean(m))
+  if (metadatas.length === 0) return
+  const existing = useMediaLibraryStore.getState()
+  const mediaById = { ...existing.mediaById }
+  for (const meta of metadatas) mediaById[meta.id] = meta
+  useMediaLibraryStore.setState({ mediaItems: Object.values(mediaById), mediaById })
 }
 
 function triggerDownload(blob: Blob, fileName: string): void {
@@ -205,6 +230,8 @@ async function renderTimeline(input: HeadlessTimelineInput): Promise<HeadlessRen
   // Register media URLs (range-streamed by mediabunny) so resolveMediaUrls()
   // and the engine's sub-comp media lookup resolve without the storage layer.
   registerMediaUrls(media)
+  // Seed media metadata so codec lookups resolve (enables AC-3/E-AC-3 audio).
+  seedMediaLibrary(media)
 
   await adaptVideoSettings(settings)
 

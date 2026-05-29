@@ -98,10 +98,14 @@ npm run headless -- --workspace "<ws>" --project <id> --audio-only --container m
 - **Codec support is verified at render time** and falls back the same way the
   app does (e.g. H.264 → VP9 if unavailable). Headless Chrome here supports
   H.264/HEVC/VP9/AV1 video and AAC/Opus audio with hardware WebGPU.
-- **Non-browser audio codecs** (AC-3/E-AC-3/DTS, e.g. some `.mkv`s) can't be
-  decoded headlessly — the app pre-decodes these to a WAV cache on import; the
-  harness doesn't read that cache yet, so such audio may be silent. Video is
-  unaffected.
+- **Audio codecs:** AAC/MP3/Opus/Vorbis/FLAC/PCM decode natively; **AC-3/E-AC-3
+  (Dolby Digital / DD+) decode via `@mediabunny/ac3`** — the CLI passes each
+  media's `metadata.json` to the harness, which seeds the media-library store so
+  the codec is recognized and the AC-3 decoder is registered. Truly exotic
+  codecs (e.g. DTS) still can't be decoded headlessly; the CLI warns and that
+  audio is silent (video unaffected). Supporting those would need a Node-side
+  pre-decode (ffmpeg / `@mediabunny/server`) — not wired up since it needs a
+  heavy native dependency and is rarely needed.
 - A harmless `Video load error` may log — that's the optional DOM `<video>`
   fallback; decode goes through mediabunny/WebCodecs and is unaffected.
 

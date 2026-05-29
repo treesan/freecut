@@ -97,6 +97,17 @@ export function collectMediaIds(project, range = null) {
   return [...ids]
 }
 
+/** Read a media's MediaMetadata (media/{id}/metadata.json), or null if absent/unreadable. */
+export function readMediaMetadata(workspaceDir, mediaId) {
+  const metaPath = path.join(workspaceDir, 'media', mediaId, 'metadata.json')
+  if (!fs.existsSync(metaPath)) return null
+  try {
+    return JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 /** Find the source file for a media id under media/{id}/ (first non-reserved file). */
 function findMediaSourceFile(workspaceDir, mediaId) {
   const mediaDir = path.join(workspaceDir, 'media', mediaId)
