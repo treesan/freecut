@@ -160,6 +160,34 @@ so its source range, fps, and audio companion match an in-app import.
 ]
 ```
 
+## Render service (serve.mjs)
+
+For automation / many renders, run a long-lived service that keeps one warm
+Chrome + harness over a workspace, avoiding the per-call cold start. Requests
+are serialized (one page op at a time).
+
+```bash
+npm run headless:serve -- --workspace "<ws>" --port 8787   # add --build on first run
+
+# then:
+curl localhost:8787/health
+curl localhost:8787/projects
+curl -X POST localhost:8787/render -H 'content-type: application/json' \
+  -d '{"project":"<id>","codec":"vp9","duration":5}' -o out.webm
+curl -X POST localhost:8787/edit -H 'content-type: application/json' \
+  -d '{"project":"<id>","ops":[{"op":"addText","text":"Hi","from":0}]}'
+```
+
+| Route | Body | Returns |
+|-------|------|---------|
+| `GET /health` | — | `{ ok, harnessUrl }` |
+| `GET /projects` | — | `[{ id, name, updatedAt }]` |
+| `POST /render` | `{ project\|projectObject, codec?, container?, resolution?, fps?, quality?, in?, outSec?, duration?, audioOnly? }` | the rendered file (attachment) |
+| `POST /edit` | `{ project\|projectObject, ops, ... }` | `{ ok, project, applied, results }` |
+
+`project` is a workspace project id; `projectObject` is an inline Project JSON.
+Media is resolved from the service's workspace by id.
+
 ## Dev/regression scripts
 
 - `node headless/probe.mjs` — report WebGPU + WebCodecs support in headless Chrome.

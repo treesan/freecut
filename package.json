@@ -35,6 +35,7 @@
     "test:coverage": "vp test run --coverage",
     "headless": "node headless/render.mjs",
     "headless:edit": "node headless/edit.mjs",
+    "headless:serve": "node headless/serve.mjs",
     "headless:test": "node headless/test.mjs",
     "changelog:append": "node scripts/changelog-append.mjs",
     "changelog:rollup": "node scripts/changelog-rollup.mjs",
