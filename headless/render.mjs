@@ -5,7 +5,13 @@
 //
 // Usage:
 //   node headless/render.mjs --workspace <dir> --project <id|project.json> [options]
+//   node headless/render.mjs --workspace <dir> --batch <jobs.json>
 //   node headless/render.mjs --workspace <dir> --list
+//
+// --batch <jobs.json>: an array of job objects, each with the same keys as the
+// CLI flags (project, out, codec, container, resolution, fps, quality, in,
+// out-sec, duration, audio-only). All jobs share one --workspace and reuse a
+// single warm browser.
 //
 // Options:
 //   --out <path>           Output file (default: ./<project-name>.<container>)
@@ -36,6 +42,7 @@ import {
   listProjects,
   collectMediaIds,
   resolveMediaFiles,
+  resolveMediaFile,
   readMediaMetadata,
 } from './lib/workspace.mjs'
 import { createMediaServer } from './media-server.mjs'
@@ -133,15 +140,17 @@ async function ensureHarnessReachable(url) {
 }
 
 /**
- * Stand up the harness + media servers and return a uniform interface.
- * Default: standalone server over the built dist/. With --harness-url: drive a
- * running Vite dev server, serving media from a separate cross-origin server.
+ * Stand up the harness + media servers (media resolved dynamically from the
+ * workspace, so one server handles any project / batch job). Default: standalone
+ * server over the built dist/. With --harness-url: drive a running Vite dev
+ * server, serving media from a separate cross-origin server.
  */
-async function startServers(args, files) {
+async function startServers(args, workspace) {
+  const resolveMedia = (mediaId) => resolveMediaFile(workspace, mediaId)
   const devUrl = args['harness-url']
   if (devUrl) {
     await ensureHarnessReachable(devUrl)
-    const mediaServer = await createMediaServer(files)
+    const mediaServer = await createMediaServer(resolveMedia)
     return {
       harnessUrl: devUrl,
       mediaUrlOf: (id) => mediaServer.url(id),
@@ -162,12 +171,103 @@ async function startServers(args, files) {
     }
   }
 
-  const server = await createHarnessServer({ distDir, mediaFiles: files })
+  const server = await createHarnessServer({ distDir, resolveMedia })
   return {
     harnessUrl: server.harnessUrl,
     mediaUrlOf: (id) => server.mediaUrl(id),
     closeServers: () => server.close(),
   }
+}
+
+/** Compute the render range (frames) from a job's in/out-sec/duration (seconds). */
+function computeRange(jobArgs, fps) {
+  const hasRange =
+    jobArgs.in !== undefined || jobArgs['out-sec'] !== undefined || jobArgs.duration !== undefined
+  if (!hasRange) return { hasRange: false, inPoint: null, outPoint: null }
+  const inSec = jobArgs.in !== undefined ? Number(jobArgs.in) : 0
+  const outSec =
+    jobArgs['out-sec'] !== undefined
+      ? Number(jobArgs['out-sec'])
+      : jobArgs.duration !== undefined
+        ? inSec + Number(jobArgs.duration)
+        : undefined
+  return {
+    hasRange: true,
+    inPoint: Math.round(inSec * fps),
+    outPoint: outSec !== undefined ? Math.round(outSec * fps) : null,
+  }
+}
+
+/** Resolve everything needed to render one job (no browser involved). */
+function prepareJob(workspace, jobArgs, mediaUrlOf) {
+  if (!jobArgs.project) throw new Error('Job missing "project"')
+  const { project, projectJsonPath } = loadProject(workspace, jobArgs.project)
+  const settings = buildSettings(project, jobArgs)
+  const { hasRange, inPoint, outPoint } = computeRange(jobArgs, settings.fps)
+
+  const mediaIds = collectMediaIds(
+    project,
+    hasRange ? { inFrame: inPoint ?? 0, outFrame: outPoint ?? Number.POSITIVE_INFINITY } : null,
+  )
+  const { files, missing } = resolveMediaFiles(workspace, mediaIds)
+  const media = [...files.keys()].map((id) => ({
+    mediaId: id,
+    url: mediaUrlOf(id),
+    metadata: readMediaMetadata(workspace, id) ?? undefined,
+  }))
+
+  const outName = `${(project.name ?? 'freecut-export').replace(/[^\w.-]+/g, '_')}.${settings.container}`
+  const outPath = path.resolve(jobArgs.out ?? path.join('headless', 'output', outName))
+
+  return {
+    project,
+    projectJsonPath,
+    settings,
+    hasRange,
+    inPoint,
+    outPoint,
+    media,
+    missing,
+    mediaResolved: files.size,
+    mediaTotal: mediaIds.length,
+    outPath,
+  }
+}
+
+/** Render one prepared job through an already-loaded harness page. */
+async function renderJob(page, job, setProgressLabel) {
+  fs.mkdirSync(path.dirname(job.outPath), { recursive: true })
+  if (job.missing.length > 0) {
+    console.warn(
+      `  WARNING: ${job.missing.length} media source(s) not found on disk: ${job.missing.join(', ')}`,
+    )
+  }
+  const unsupportedAudio = job.media.filter((m) => m.metadata?.audioCodecSupported === false)
+  if (unsupportedAudio.length > 0) {
+    const list = unsupportedAudio
+      .map((m) => `${m.metadata.fileName ?? m.mediaId} (${m.metadata.audioCodec ?? 'unknown'})`)
+      .join(', ')
+    console.warn(`  WARNING: audio may be silent (codec not decodable headlessly): ${list}`)
+  }
+
+  setProgressLabel(path.basename(job.outPath))
+  const downloadPromise = page.waitForEvent('download', { timeout: 30 * 60_000 })
+  downloadPromise.catch(() => {})
+  const summary = await page.evaluate((payload) => window.freecut.renderProject(payload), {
+    project: job.project,
+    settings: job.settings,
+    media: job.media,
+    renderWholeProject: !job.hasRange,
+    inPoint: job.inPoint,
+    outPoint: job.outPoint,
+  })
+  process.stdout.write('\n')
+  const download = await downloadPromise
+  await download.saveAs(job.outPath)
+  console.log(
+    `  Done: ${job.outPath}  (${summary.mimeType}, ${(summary.fileSize / 1_000_000).toFixed(2)} MB, ${summary.durationSeconds.toFixed(2)}s)`,
+  )
+  return summary
 }
 
 async function main() {
@@ -189,80 +289,23 @@ async function main() {
     return
   }
 
-  if (!args.project) throw new Error('Missing --project <id|project.json>')
-
-  const { project, projectJsonPath } = loadProject(workspace, args.project)
-  console.log(`Project: ${project.name ?? project.id} (${projectJsonPath})`)
-
-  const settings = buildSettings(project, args)
-  console.log(
-    `Output: ${settings.mode} ${settings.codec}/${settings.container} ` +
-      `${settings.resolution.width}x${settings.resolution.height}@${settings.fps}`,
-  )
-
-  // Optional render range (frames), from --in / --out-sec / --duration seconds.
-  const fps = settings.fps
-  const hasRange = args.in !== undefined || args['out-sec'] !== undefined || args.duration !== undefined
-  let inPoint = null
-  let outPoint = null
-  if (hasRange) {
-    const inSec = args.in !== undefined ? Number(args.in) : 0
-    const outSec =
-      args['out-sec'] !== undefined
-        ? Number(args['out-sec'])
-        : args.duration !== undefined
-          ? inSec + Number(args.duration)
-          : undefined
-    inPoint = Math.round(inSec * fps)
-    outPoint = outSec !== undefined ? Math.round(outSec * fps) : null
-    console.log(`Range: frames ${inPoint}..${outPoint ?? 'end'} (${inSec}s..${outSec ?? 'end'}s)`)
+  // Determine jobs: --batch <file> (array of job-arg objects) or a single CLI job.
+  let jobArgsList
+  if (args.batch) {
+    const batchPath = path.resolve(args.batch)
+    if (!fs.existsSync(batchPath)) throw new Error(`Batch file not found: ${batchPath}`)
+    const parsed = JSON.parse(fs.readFileSync(batchPath, 'utf8'))
+    jobArgsList = Array.isArray(parsed) ? parsed : [parsed]
+    if (jobArgsList.length === 0) throw new Error('Batch file is empty')
+  } else {
+    if (!args.project) throw new Error('Missing --project <id|project.json> (or --batch <file>)')
+    jobArgsList = [args]
   }
 
-  // Resolve referenced media to files on disk (only media overlapping the range).
-  const mediaIds = collectMediaIds(
-    project,
-    hasRange ? { inFrame: inPoint ?? 0, outFrame: outPoint ?? Number.POSITIVE_INFINITY } : null,
-  )
-  const { files, missing } = resolveMediaFiles(workspace, mediaIds)
-  if (missing.length > 0) {
-    console.warn(
-      `WARNING: ${missing.length} media source(s) not found on disk: ${missing.join(', ')}\n` +
-        `  Open the project in the FreeCut app once so media is mirrored into the workspace folder.`,
-    )
-  }
-  console.log(`Media: ${files.size}/${mediaIds.length} resolved`)
-
-  // Serve the harness + media. Default: standalone server over the built dist/.
-  // Dev mode (--harness-url): drive a running Vite dev server + a cross-origin
-  // media server.
-  const { harnessUrl, mediaUrlOf, closeServers } = await startServers(args, files)
-  const media = [...files.keys()].map((mediaId) => ({
-    mediaId,
-    url: mediaUrlOf(mediaId),
-    metadata: readMediaMetadata(workspace, mediaId) ?? undefined,
-  }))
+  const { harnessUrl, mediaUrlOf, closeServers } = await startServers(args, workspace)
   console.log(`Harness: ${harnessUrl}`)
 
-  // Warn about audio codecs that aren't decodable headlessly. AC-3/E-AC-3 ARE
-  // (via @mediabunny/ac3, marked audioCodecSupported:true); a false flag means
-  // something exotic like DTS — its audio will be silent in the render.
-  const unsupportedAudio = media.filter((m) => m.metadata?.audioCodecSupported === false)
-  if (unsupportedAudio.length > 0) {
-    const list = unsupportedAudio
-      .map((m) => `${m.metadata.fileName ?? m.mediaId} (${m.metadata.audioCodec ?? 'unknown'})`)
-      .join(', ')
-    console.warn(`WARNING: audio codec not decodable headlessly — audio may be silent for: ${list}`)
-  }
-
-  const outName = `${(project.name ?? 'freecut-export').replace(/[^\w.-]+/g, '_')}.${settings.container}`
-  const outPath = path.resolve(args.out ?? path.join('headless', 'output', outName))
-  fs.mkdirSync(path.dirname(outPath), { recursive: true })
-
-  const browser = await chromium.launch({
-    channel: 'chrome',
-    headless: !args.head,
-    args: GPU_ARGS,
-  })
+  const browser = await chromium.launch({ channel: 'chrome', headless: !args.head, args: GPU_ARGS })
   try {
     const context = await browser.newContext({ acceptDownloads: true })
     const page = await context.newPage()
@@ -274,37 +317,33 @@ async function main() {
     })
 
     let lastPct = -1
+    let progressLabel = ''
+    const setProgressLabel = (label) => {
+      progressLabel = label
+      lastPct = -1
+    }
     await page.exposeBinding('__freecutProgress', (_src, progress) => {
       const pct = Math.floor(progress?.progress ?? 0)
       if (pct !== lastPct) {
         lastPct = pct
-        process.stdout.write(`\r  ${(progress?.phase ?? 'render').padEnd(10)} ${pct}%   `)
+        process.stdout.write(`\r  ${progressLabel} ${(progress?.phase ?? 'render').padEnd(10)} ${pct}%   `)
       }
     })
 
     await page.goto(harnessUrl, { waitUntil: 'load', timeout: 60_000 })
     await page.waitForFunction(() => Boolean(window.freecut?.ready), { timeout: 30_000 })
-    console.log('Harness ready. Rendering...')
 
-    const downloadPromise = page.waitForEvent('download', { timeout: 30 * 60_000 })
-    // Avoid an unhandled rejection if the render throws and we close the page.
-    downloadPromise.catch(() => {})
-    const summary = await page.evaluate((payload) => window.freecut.renderProject(payload), {
-      project,
-      settings,
-      media,
-      renderWholeProject: !hasRange,
-      inPoint,
-      outPoint,
-    })
-    process.stdout.write('\n')
-
-    const download = await downloadPromise
-    await download.saveAs(outPath)
-    console.log(`Done: ${outPath}`)
-    console.log(
-      `  ${summary.mimeType}, ${(summary.fileSize / 1_000_000).toFixed(2)} MB, ${summary.durationSeconds.toFixed(2)}s`,
-    )
+    for (let i = 0; i < jobArgsList.length; i++) {
+      const job = prepareJob(workspace, jobArgsList[i], mediaUrlOf)
+      const range = job.hasRange ? ` frames ${job.inPoint}..${job.outPoint ?? 'end'}` : ''
+      console.log(
+        `\n[${i + 1}/${jobArgsList.length}] ${job.project.name ?? job.project.id} -> ` +
+          `${job.settings.mode} ${job.settings.codec}/${job.settings.container} ` +
+          `${job.settings.resolution.width}x${job.settings.resolution.height}@${job.settings.fps}${range} ` +
+          `| media ${job.mediaResolved}/${job.mediaTotal}`,
+      )
+      await renderJob(page, job, setProgressLabel)
+    }
   } finally {
     await browser.close()
     await closeServers()

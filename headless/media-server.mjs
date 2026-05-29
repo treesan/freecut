@@ -29,11 +29,16 @@ const MIME = {
 }
 
 /**
- * @param {Map<string,string>} mediaFiles  mediaId -> absolute file path
+ * @param {Map<string,string> | ((mediaId: string) => string | null)} mediaFilesOrResolver
+ *   A mediaId->path Map, or a resolver function (mediaId) => absolute path | null.
  * @param {number} [port]  0 = ephemeral
  * @returns {Promise<{ base: string, url: (id: string) => string, close: () => Promise<void> }>}
  */
-export async function createMediaServer(mediaFiles, port = 0) {
+export async function createMediaServer(mediaFilesOrResolver, port = 0) {
+  const resolveMedia =
+    typeof mediaFilesOrResolver === 'function'
+      ? mediaFilesOrResolver
+      : (mediaId) => mediaFilesOrResolver.get(mediaId) ?? null
   const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
@@ -55,7 +60,7 @@ export async function createMediaServer(mediaFiles, port = 0) {
     }
 
     const mediaId = decodeURIComponent(match[1])
-    const filePath = mediaFiles.get(mediaId)
+    const filePath = resolveMedia(mediaId)
     if (!filePath || !fs.existsSync(filePath)) {
       res.writeHead(404)
       res.end(`media not found: ${mediaId}`)

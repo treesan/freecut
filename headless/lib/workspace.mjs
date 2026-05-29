@@ -108,8 +108,8 @@ export function readMediaMetadata(workspaceDir, mediaId) {
   }
 }
 
-/** Find the source file for a media id under media/{id}/ (first non-reserved file). */
-function findMediaSourceFile(workspaceDir, mediaId) {
+/** Resolve a media id to its source file path under media/{id}/ (first non-reserved file). */
+export function resolveMediaFile(workspaceDir, mediaId) {
   const mediaDir = path.join(workspaceDir, 'media', mediaId)
   if (!fs.existsSync(mediaDir)) return null
   for (const entry of fs.readdirSync(mediaDir, { withFileTypes: true })) {
@@ -128,7 +128,7 @@ export function resolveMediaFiles(workspaceDir, mediaIds) {
   const files = new Map()
   const missing = []
   for (const mediaId of mediaIds) {
-    const filePath = findMediaSourceFile(workspaceDir, mediaId)
+    const filePath = resolveMediaFile(workspaceDir, mediaId)
     if (filePath) files.set(mediaId, filePath)
     else missing.push(mediaId)
   }

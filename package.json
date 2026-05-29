@@ -34,6 +34,8 @@
     "test:preview-sync:stress": "node scripts/preview-sync-stress.mjs --runs 20",
     "test:coverage": "vp test run --coverage",
     "headless": "node headless/render.mjs",
+    "headless:edit": "node headless/edit.mjs",
+    "headless:test": "node headless/test.mjs",
     "changelog:append": "node scripts/changelog-append.mjs",
     "changelog:rollup": "node scripts/changelog-rollup.mjs",
     "prepare": "vp config"

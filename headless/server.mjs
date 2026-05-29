@@ -87,10 +87,12 @@ async function serveFile(req, res, filePath, { allowRange } = { allowRange: fals
 }
 
 /**
- * @param {{ distDir: string, mediaFiles: Map<string,string>, port?: number }} opts
+ * @param {{ distDir: string, resolveMedia?: (mediaId: string) => string | null, port?: number }} opts
+ *   resolveMedia maps a media id to an absolute source-file path (or null). Omit
+ *   to serve no media (e.g. edit-only).
  * @returns {Promise<{ base: string, harnessUrl: string, mediaUrl: (id: string) => string, close: () => Promise<void> }>}
  */
-export async function createHarnessServer({ distDir, mediaFiles, port = 0 }) {
+export async function createHarnessServer({ distDir, resolveMedia = () => null, port = 0 }) {
   const resolvedDist = path.resolve(distDir)
 
   const server = http.createServer(async (req, res) => {
@@ -109,7 +111,7 @@ export async function createHarnessServer({ distDir, mediaFiles, port = 0 }) {
 
     const mediaMatch = url.pathname.match(/^\/media\/(.+)$/)
     if (mediaMatch) {
-      const filePath = mediaFiles.get(decodeURIComponent(mediaMatch[1]))
+      const filePath = resolveMedia(decodeURIComponent(mediaMatch[1]))
       if (!filePath) {
         res.writeHead(404)
         res.end('media not found')

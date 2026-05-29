@@ -91,7 +91,7 @@ async function startHarness(args) {
       )
     }
   }
-  const server = await createHarnessServer({ distDir, mediaFiles: new Map() })
+  const server = await createHarnessServer({ distDir })
   return { harnessUrl: server.harnessUrl, close: () => server.close() }
 }
 
