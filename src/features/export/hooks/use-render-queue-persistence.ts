@@ -5,9 +5,12 @@
  * queue changes, so a refresh (or reopening the project) restores the queue.
  *
  *  - In-flight jobs are reset to `queued` on load (the worker is gone after a
- *    reload) so they resume from the top.
- *  - Saves are debounced and keyed on a status signature, so per-frame progress
- *    updates don't thrash the disk — only add/remove/status/pause changes write.
+ *    reload), and a restored queue with pending work stays PAUSED until the
+ *    user resumes — a refresh never silently kicks off renders.
+ *  - Saves fire immediately (coalesced to one per microtask) and are keyed on a
+ *    status signature, so per-frame progress updates don't thrash the disk —
+ *    only add/remove/status/pause changes write, and a job's terminal state is
+ *    on disk before a refresh can lose it.
  *  - Snapshots are de-duplicated by reference, so the many segments of one
  *    "split" share a single stored timeline copy instead of N copies.
  */
@@ -24,7 +27,6 @@ import {
 const log = createLogger('RenderQueue')
 
 const SCHEMA_VERSION = 1
-const SAVE_DEBOUNCE_MS = 600
 
 type PersistedJob = Omit<RenderJob, 'snapshot'> & { snapshotId: string }
 
@@ -76,7 +78,10 @@ function deserialize(file: PersistedRenderQueue | null): { jobs: RenderJob[]; is
       }
     })
     .filter((job): job is RenderJob => job !== null)
-  return { jobs, isPaused: Boolean(file.isPaused) }
+  // Hold a restored queue until the user resumes; nothing to pause when there
+  // is no pending work (so jobs added after a refresh still run normally).
+  const hasQueued = jobs.some((job) => job.status === 'queued')
+  return { jobs, isPaused: hasQueued }
 }
 
 /** A signature that changes on add/remove/status/pause — but NOT on progress. */
@@ -90,7 +95,7 @@ export function useRenderQueuePersistence(projectId: string): void {
     let cancelled = false
     let hydrated = false
     let unsubscribe = () => {}
-    let timer: number | undefined
+    let saveQueued = false
     let lastSignature = ''
 
     const save = () => {
@@ -100,9 +105,15 @@ export function useRenderQueuePersistence(projectId: string): void {
       )
     }
 
+    // Coalesce same-tick changes into one write, but flush on the next
+    // microtask — so a job's terminal status lands on disk right away.
     const scheduleSave = () => {
-      if (timer !== undefined) clearTimeout(timer)
-      timer = window.setTimeout(save, SAVE_DEBOUNCE_MS)
+      if (saveQueued) return
+      saveQueued = true
+      queueMicrotask(() => {
+        saveQueued = false
+        if (!cancelled) save()
+      })
     }
 
     // Clear synchronously before the async load so a project switch can't leave
@@ -134,7 +145,6 @@ export function useRenderQueuePersistence(projectId: string): void {
     return () => {
       cancelled = true
       unsubscribe()
-      if (timer !== undefined) clearTimeout(timer)
       // Flush the final state for THIS project before the effect re-runs for
       // another project (only if we actually loaded — avoids clobbering on a
       // StrictMode double-mount that never hydrated).
