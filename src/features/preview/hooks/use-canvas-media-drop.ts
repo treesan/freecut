@@ -274,7 +274,14 @@ export function useCanvasMediaDrop({ coordParams, projectSize }: UseCanvasMediaD
             effectiveProjectSize,
           )
 
-      timelineState.addItem(placedItem)
+      // Keep audio and video on separate tracks: a video dropped on the canvas
+      // with embedded audio gets its audio split onto a linked audio track,
+      // just like a timeline drop. Otherwise it's a plain visual placement.
+      if (placedItem.type === 'video' && media.audioCodec) {
+        timelineState.addItemWithLinkedAudio(placedItem)
+      } else {
+        timelineState.addItem(placedItem)
+      }
       selectionState.setActiveTrack(placement.trackId)
       selectionState.selectItems([placedItem.id])
     },

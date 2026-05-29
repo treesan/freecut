@@ -225,10 +225,6 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
         items: itemsByTrackId[track.id] ?? [],
       }))
   }, [itemsByTrackId, trackSnapshotVersion, tracks])
-  const combinedTimelineItems = useMemo(
-    () => combinedTracks.flatMap((track) => track.items),
-    [combinedTracks],
-  )
   const combinedCompositionsById = useMemo<AudioMeterCompositionLookup>(() => {
     const next: AudioMeterCompositionLookup = {}
 
@@ -503,8 +499,8 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
   // ---------------------------------------------------------------------------
 
   const mixerSourceTracks = useMemo(() => {
-    return combinedTracks.filter((track) => isAudioMixerTrack(track, combinedTimelineItems))
-  }, [combinedTimelineItems, combinedTracks])
+    return combinedTracks.filter((track) => isAudioMixerTrack(track))
+  }, [combinedTracks])
 
   const mixerTracks = useMemo<AudioMixerTrack[]>(() => {
     return mixerSourceTracks.map((track) => ({
@@ -736,14 +732,13 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
   const applyMuteSoloLiveGains = useCallback(() => {
     const currentTracks = useItemsStore.getState().tracks
     const currentItemsByTrackId = useItemsStore.getState().itemsByTrackId
-    const currentTimelineItems = Object.values(currentItemsByTrackId).flat()
     const audioTracks = currentTracks
       .filter((t) => !t.isGroup)
       .map((track) => ({
         ...track,
         items: currentItemsByTrackId[track.id] ?? [],
       }))
-      .filter((track) => isAudioMixerTrack(track, currentTimelineItems))
+      .filter((track) => isAudioMixerTrack(track))
     if (audioTracks.length === 0) {
       clearMixerLiveGainLayer(MUTE_SOLO_LIVE_GAIN_LAYER_ID)
       return

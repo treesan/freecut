@@ -41,6 +41,7 @@ import {
   needsLegacyAvTrackLayoutRepair,
   repairLegacyAvTrackLayout,
 } from '@/features/timeline/utils/legacy-av-track-repair'
+import { splitUnpairedVideoAudio } from '@/features/timeline/utils/embedded-audio-split'
 import { getCompositionOwnedAudioSources } from '@/features/timeline/utils/composition-clip-summary'
 import {
   getLinkedCompositionAudioCompanion,
@@ -509,6 +510,67 @@ function repairCompoundClipWrappers(project: Project): { project: Project; repai
   }
 }
 
+/**
+ * Surgically split any audible video that lacks a linked audio companion,
+ * across the root timeline and every composition. Preserves track names/order;
+ * only appends generated audio (and audio tracks when needed). This catches
+ * correctly-laid-out projects that {@link repairLegacyAvTrackLayout} skips —
+ * e.g. a video placed via the preview canvas whose audio was never split.
+ */
+function backfillUnpairedVideoAudio(
+  project: Project,
+  videoHasAudioByMediaId: Record<string, boolean | undefined>,
+): { project: Project; changed: boolean } {
+  if (!project.timeline) {
+    return { project, changed: false }
+  }
+
+  const rootResult = splitUnpairedVideoAudio({
+    tracks: (project.timeline.tracks ?? []) as TimelineTrack[],
+    items: (project.timeline.items ?? []) as TimelineItem[],
+    keyframes: (project.timeline.keyframes ?? []) as ItemKeyframes[],
+    videoHasAudioByMediaId,
+  })
+
+  let changed = rootResult.changed
+  const repairedCompositions = (project.timeline.compositions ?? []).map((composition) => {
+    const result = splitUnpairedVideoAudio({
+      tracks: composition.tracks as TimelineTrack[],
+      items: composition.items as TimelineItem[],
+      keyframes: (composition.keyframes ?? []) as ItemKeyframes[],
+      videoHasAudioByMediaId,
+    })
+    if (!result.changed) {
+      return composition
+    }
+    changed = true
+    return {
+      ...composition,
+      tracks: result.tracks as typeof composition.tracks,
+      items: result.items as typeof composition.items,
+      keyframes: result.keyframes as typeof composition.keyframes,
+    }
+  })
+
+  if (!changed) {
+    return { project, changed: false }
+  }
+
+  return {
+    changed: true,
+    project: {
+      ...project,
+      timeline: {
+        ...project.timeline,
+        tracks: rootResult.tracks as typeof project.timeline.tracks,
+        items: rootResult.items as typeof project.timeline.items,
+        keyframes: rootResult.keyframes as typeof project.timeline.keyframes,
+        compositions: repairedCompositions,
+      },
+    },
+  }
+}
+
 async function repairLegacyProjectAvLayouts(
   project: Project,
 ): Promise<{ project: Project; repaired: boolean }> {
@@ -581,7 +643,8 @@ async function repairLegacyProjectAvLayouts(
       compositions: repairedCompositions.map((entry) => entry.composition),
     },
   }
-  const repairedCompoundWrappers = repairCompoundClipWrappers(repairedLayoutProject)
+  const backfilledAudio = backfillUnpairedVideoAudio(repairedLayoutProject, videoHasAudioByMediaId)
+  const repairedCompoundWrappers = repairCompoundClipWrappers(backfilledAudio.project)
   const cleanedEmptyAudioTracks = cleanupRedundantEmptyClassicAudioTracks(
     repairedCompoundWrappers.project,
   )
@@ -589,6 +652,7 @@ async function repairLegacyProjectAvLayouts(
   const repaired =
     rootRepair.changed ||
     repairedCompositions.some((entry) => entry.repair.changed) ||
+    backfilledAudio.changed ||
     repairedCompoundWrappers.repaired ||
     cleanedEmptyAudioTracks.cleaned
   if (!repaired) {
