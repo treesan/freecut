@@ -22,6 +22,7 @@ import type { ItemKeyframes } from '@/types/keyframe'
 import type { AudioEqSettings } from '@/types/audio'
 import type { CompositionInputProps } from '@/types/export'
 import type { MediaMetadata } from '@/types/storage'
+import type { ItemEffect } from '@/types/effects'
 
 import { createLogger } from '@/shared/logging/logger'
 import { migrateProject } from '@/shared/projects/migrations'
@@ -161,6 +162,56 @@ function defaultFileName(settings: ClientExportSettings): string {
   return `freecut-export.${settings.container}`
 }
 
+async function detectWebGpu(): Promise<boolean> {
+  try {
+    if (!('gpu' in navigator) || !navigator.gpu) return false
+    const adapter = await navigator.gpu.requestAdapter()
+    return Boolean(adapter)
+  } catch {
+    return false
+  }
+}
+
+const hasEnabledEffects = (items: Array<{ effects?: ItemEffect[] }>): boolean =>
+  items.some((item) => item.effects?.some((effect) => effect.enabled))
+
+/** Whether the render needs WebGPU: GPU effects have no Canvas2D fallback. */
+function compositionUsesGpuEffects(
+  composition: CompositionInputProps,
+  compositions: SubComposition[],
+): boolean {
+  const topLevel = (composition.tracks ?? []).flatMap((track) => track.items ?? [])
+  if (hasEnabledEffects(topLevel)) return true
+  return compositions.some((comp) => hasEnabledEffects(comp.items ?? []))
+}
+
+/**
+ * Verify WebGPU is available when the project needs it. GPU effects can't fall
+ * back to Canvas2D, so rendering them without WebGPU would silently drop them —
+ * fail loudly instead. Transitions DO have a Canvas2D fallback, so a missing
+ * GPU there is only a warning.
+ */
+async function assertGpuForComposition(
+  composition: CompositionInputProps,
+  compositions: SubComposition[],
+): Promise<void> {
+  const needsGpuEffects = compositionUsesGpuEffects(composition, compositions)
+  const hasTransitions = (composition.transitions?.length ?? 0) > 0
+  if (!needsGpuEffects && !hasTransitions) return
+
+  const gpuAvailable = await detectWebGpu()
+  if (gpuAvailable) return
+
+  if (needsGpuEffects) {
+    throw new Error(
+      'This project uses GPU effects but WebGPU is unavailable in this environment, ' +
+        'so effects cannot render. Launch Chrome with --enable-unsafe-webgpu on a machine ' +
+        'with a GPU (or SwiftShader/Vulkan in headless/Docker).',
+    )
+  }
+  log.warn('WebGPU unavailable; transitions will use the Canvas2D fallback')
+}
+
 /**
  * Ensure the requested video codec is actually encodable in this browser;
  * otherwise fall back the same way the in-app export does. Mutates and
@@ -249,6 +300,9 @@ async function renderTimeline(input: HeadlessTimelineInput): Promise<HeadlessRen
     busAudioEq,
     masterBusDb,
   )
+
+  // Fail loudly if the project needs WebGPU (effects) but it isn't available.
+  await assertGpuForComposition(composition, compositions)
 
   // Resolve top-level media (mediaId -> seeded blob URL). Export never uses proxies.
   composition.tracks = await resolveMediaUrls(composition.tracks, { useProxy: false })
