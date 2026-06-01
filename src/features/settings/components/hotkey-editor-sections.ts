@@ -1,4 +1,9 @@
-import { normalizeHotkeyBinding, type HotkeyBindingMap, type HotkeyKey } from '@/config/hotkeys'
+import {
+  formatHotkeyBinding,
+  normalizeHotkeyBinding,
+  type HotkeyBindingMap,
+  type HotkeyKey,
+} from '@/config/hotkeys'
 
 export interface HotkeyEditorItem {
   /** i18n key for the command label */
@@ -24,6 +29,10 @@ interface HotkeyEditorSearchOptions {
   sections: readonly HotkeyEditorSection[]
   hotkeys: HotkeyBindingMap
   translate: (key: string) => string
+}
+
+export function getHotkeyBindingDisplayLabel(binding: string, unassignedLabel: string): string {
+  return binding ? formatHotkeyBinding(binding) : unassignedLabel
 }
 
 export function getHotkeyEditorSearchResults({

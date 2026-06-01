@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { HOTKEYS } from '@/config/hotkeys'
-import { HOTKEY_EDITOR_SECTIONS, getHotkeyEditorSearchResults } from './hotkey-editor-sections'
+import {
+  HOTKEY_EDITOR_SECTIONS,
+  getHotkeyBindingDisplayLabel,
+  getHotkeyEditorSearchResults,
+} from './hotkey-editor-sections'
 
 describe('getHotkeyEditorSearchResults', () => {
   it('filters commands by localized label', () => {
@@ -28,5 +32,15 @@ describe('getHotkeyEditorSearchResults', () => {
     expect(results.map((result) => result.item.labelKey)).toEqual([
       'projects.settings.hotkeys.items.exportVideo',
     ])
+  })
+})
+
+describe('getHotkeyBindingDisplayLabel', () => {
+  it('shows an explicit unassigned label for blank bindings', () => {
+    expect(getHotkeyBindingDisplayLabel('', 'Unassigned')).toBe('Unassigned')
+  })
+
+  it('formats non-empty bindings normally', () => {
+    expect(getHotkeyBindingDisplayLabel('mod+shift+e', 'Unassigned')).toBe('Ctrl + Shift + E')
   })
 })

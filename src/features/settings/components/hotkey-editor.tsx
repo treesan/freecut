@@ -3,6 +3,16 @@ import { useTranslation } from 'react-i18next'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { AlertTriangle, Download, Keyboard, RotateCcw, Search, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -23,6 +33,7 @@ import {
 } from '@/config/hotkeys'
 import {
   HOTKEY_EDITOR_SECTIONS,
+  getHotkeyBindingDisplayLabel,
   getHotkeyEditorSearchResults,
   type HotkeyEditorItem,
   type HotkeyEditorSection,
@@ -400,6 +411,7 @@ export function HotkeyEditor() {
   const [draftBinding, setDraftBinding] = useState('')
   const [previewBinding, setPreviewBinding] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [isResetAllDialogOpen, setIsResetAllDialogOpen] = useState(false)
 
   const selectedItem = HOTKEY_ITEM_BY_KEY[selectedKey]
   const selectedSlotLabel = t(getSlotLabelKey(selectedItem, selectedKey))
@@ -575,6 +587,12 @@ export function HotkeyEditor() {
     stopCapture()
   }
 
+  const confirmResetAllHotkeys = () => {
+    resetHotkeys()
+    stopCapture()
+    toast.success(t('projects.settings.hotkeys.resetAllToast'))
+  }
+
   const handleTokenClick = (token: string) => {
     if (token === 'mod' || token === 'alt' || token === 'shift') return
     stopCapture()
@@ -743,7 +761,14 @@ export function HotkeyEditor() {
                           </div>
                           <div className="mt-0.5 truncate text-[10px] uppercase tracking-[0.14em]">
                             {t(section.titleKey)} ·{' '}
-                            {item.keys.map((key) => formatHotkeyBinding(hotkeys[key])).join(' / ')}
+                            {item.keys
+                              .map((key) =>
+                                getHotkeyBindingDisplayLabel(
+                                  hotkeys[key],
+                                  t('projects.settings.hotkeys.unassigned'),
+                                ),
+                              )
+                              .join(' / ')}
                           </div>
                         </button>
                       </div>
@@ -833,7 +858,10 @@ export function HotkeyEditor() {
                   {t('projects.settings.hotkeys.current')}
                 </div>
                 <div className="mt-1 font-medium text-foreground">
-                  {formatHotkeyBinding(hotkeys[selectedKey])}
+                  {getHotkeyBindingDisplayLabel(
+                    hotkeys[selectedKey],
+                    t('projects.settings.hotkeys.unassigned'),
+                  )}
                 </div>
               </div>
               <div>
@@ -992,19 +1020,37 @@ export function HotkeyEditor() {
             </p>
 
             <div className="border-t border-white/6 pt-3">
-              <Button
-                variant="destructive"
-                size="sm"
-                className="w-full gap-1.5"
-                onClick={() => {
-                  resetHotkeys()
-                  stopCapture()
-                }}
-                disabled={customCount === 0}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                {t('projects.settings.hotkeys.resetAll')}
-              </Button>
+              <AlertDialog open={isResetAllDialogOpen} onOpenChange={setIsResetAllDialogOpen}>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full gap-1.5"
+                  onClick={() => setIsResetAllDialogOpen(true)}
+                  disabled={customCount === 0}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {t('projects.settings.hotkeys.resetAll')}
+                </Button>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t('projects.settings.hotkeys.resetAllConfirmTitle')}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('projects.settings.hotkeys.resetAllConfirmDescription')}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={confirmResetAllHotkeys}
+                    >
+                      {t('projects.settings.hotkeys.resetAllConfirmAction')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </div>
