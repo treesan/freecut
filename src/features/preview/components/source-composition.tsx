@@ -18,6 +18,7 @@ import { getDirectionalPrewarmOffsets } from '../utils/fast-scrub-prewarm'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { useSourcePlayerStore } from '@/shared/state/source-player'
 import { useMediaLibraryStore } from '@/features/preview/deps/media-library'
+import { shouldSeekPlayingMedia } from '../utils/source-media-sync'
 import { FileAudio } from 'lucide-react'
 
 interface SourceCompositionProps {
@@ -36,7 +37,6 @@ let globalSourceMonitorDecoderPool: SharedVideoExtractorPool | null = null
 const SOURCE_MONITOR_STRICT_DECODE_FALLBACK_FAILURES = 2
 const SOURCE_MONITOR_FRAME_CACHE_MAX = 90
 const SOURCE_MONITOR_CACHE_TIME_QUANTUM = 1 / 60
-const SOURCE_MONITOR_PLAYING_RESYNC_THRESHOLD_FRAMES = 6
 const SOURCE_MONITOR_PREWARM_MAX_TIMESTAMPS = 6
 const SOURCE_MONITOR_PREWARM_FORWARD_STEPS = 4
 const SOURCE_MONITOR_PREWARM_BACKWARD_STEPS = 6
@@ -53,10 +53,6 @@ function getSourceMonitorDecoderPool(): SharedVideoExtractorPool {
 
 function quantizeSourceMonitorTime(time: number): number {
   return Math.round(time / SOURCE_MONITOR_CACHE_TIME_QUANTUM) * SOURCE_MONITOR_CACHE_TIME_QUANTUM
-}
-
-function shouldResyncPlayingMedia(currentTime: number, targetTime: number, fps: number): boolean {
-  return Math.abs(currentTime - targetTime) * fps >= SOURCE_MONITOR_PLAYING_RESYNC_THRESHOLD_FRAMES
 }
 
 function useSourceMonitorVideoSrc(mediaId: string | undefined, src: string): string {
@@ -600,7 +596,7 @@ function VideoSource({
         }
 
         if (playingRef.current) {
-          if (!shouldResyncPlayingMedia(audio.currentTime, targetTime, fps)) {
+          if (!shouldSeekPlayingMedia(audio, targetTime, fps)) {
             return
           }
         }
@@ -632,7 +628,7 @@ function VideoSource({
       }
 
       if (playingRef.current) {
-        if (!shouldResyncPlayingMedia(video.currentTime, targetTime, fps)) {
+        if (!shouldSeekPlayingMedia(video, targetTime, fps)) {
           syncAudioTime()
           return
         }
@@ -812,7 +808,7 @@ function AudioSource({ src, fileName }: { src: string; fileName: string }) {
         return
       }
 
-      if (playing && !shouldResyncPlayingMedia(audio.currentTime, targetTime, fps)) {
+      if (playing && !shouldSeekPlayingMedia(audio, targetTime, fps)) {
         return
       }
 
