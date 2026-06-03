@@ -16,6 +16,7 @@ import { useSelectionStore } from '@/shared/state/selection'
 // Hooks
 import { useMarqueeSelection } from '@/shared/marquee/use-marquee-selection'
 import { useWaveformPrefetch } from '../hooks/use-waveform-prefetch'
+import { useTimelineAudioSkimPreview } from '../hooks/use-timeline-audio-skim-preview'
 import { withPerfMeasure, perfMarkRender } from '@/shared/logging/perf-marks'
 
 // Constants
@@ -761,6 +762,7 @@ export const TimelineContent = memo(function TimelineContent({
   const setPreviewFrameRef = useRef(setPreviewFrame)
   setPreviewFrameRef.current = setPreviewFrame
   const previewRafRef = useRef<number | null>(null)
+  useTimelineAudioSkimPreview()
 
   const pixelsToFrameRef = useRef(pixelsToFrame)
   pixelsToFrameRef.current = pixelsToFrame

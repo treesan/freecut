@@ -27,6 +27,7 @@ export {
   type CompositionDragData,
   type TimelineTemplateDragData,
 } from '../utils/drag-data-cache'
+export { audioScrubPreview } from '../utils/audio-scrub-preview'
 export {
   extractValidMediaFileEntriesFromDataTransfer,
   supportsFileSystemDragDrop,
