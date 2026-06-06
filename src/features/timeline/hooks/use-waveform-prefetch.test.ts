@@ -61,11 +61,14 @@ function WaveformPrefetchProbe({ onRender }: { onRender: () => void }) {
 }
 
 async function flushPrefetchTimers() {
-  await act(async () => {
-    vi.advanceTimersByTime(120)
-    vi.runOnlyPendingTimers()
-    await Promise.resolve()
-  })
+  for (let i = 0; i < 3; i += 1) {
+    await act(async () => {
+      vi.advanceTimersByTime(120)
+      vi.runOnlyPendingTimers()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
 }
 
 /** Replicate the prefetch range calculation */

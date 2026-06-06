@@ -36,8 +36,18 @@ import {
 import { useRankedScenes } from '../hooks/use-ranked-scenes'
 import { useSemanticIndex } from '../hooks/use-semantic-index'
 import { SceneSearchField, SceneSearchModeButtons } from './scene-search-input'
-import { SceneRow } from './scene-row'
-import { SceneCard } from './scene-card'
+import {
+  GlobalMatchedSceneRow,
+  GlobalSceneRow,
+  ScopedMatchedSceneRow,
+  ScopedSceneRow,
+} from './scene-row'
+import {
+  GlobalMatchedSceneCard,
+  GlobalSceneCard,
+  ScopedMatchedSceneCard,
+  ScopedSceneCard,
+} from './scene-card'
 
 interface SceneBrowserPanelProps {
   className?: string
@@ -133,10 +143,13 @@ export function SceneBrowserPanel({ className }: SceneBrowserPanelProps) {
     [setScope],
   )
 
-  const showMediaName = scope === null
   const hasAnyCaptions = totalScenes > 0
   const hasResults = scenes.length > 0
   const isFiltered = query.trim().length > 0
+  const SceneGridCard = scope === null ? GlobalSceneCard : ScopedSceneCard
+  const MatchedSceneGridCard = scope === null ? GlobalMatchedSceneCard : ScopedMatchedSceneCard
+  const SceneListRow = scope === null ? GlobalSceneRow : ScopedSceneRow
+  const MatchedSceneListRow = scope === null ? GlobalMatchedSceneRow : ScopedMatchedSceneRow
 
   const scopeLabel = `${t('sceneBrowser.counts.clip', {
     count: clipsWithCaptions,
@@ -224,26 +237,30 @@ export function SceneBrowserPanel({ className }: SceneBrowserPanelProps) {
           {hasResults ? (
             viewMode === 'grid' ? (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
-                {scenes.map((scene, index) => (
-                  <SceneCard
-                    key={scene.id}
-                    scene={scene}
-                    showMediaName={showMediaName}
-                    showSignals={isQuerying}
-                    isTop={isQuerying && index === 0}
-                  />
-                ))}
+                {scenes.map((scene, index) =>
+                  isQuerying ? (
+                    <MatchedSceneGridCard
+                      key={scene.id}
+                      scene={scene}
+                      rank={index === 0 ? 'top' : 'default'}
+                    />
+                  ) : (
+                    <SceneGridCard key={scene.id} scene={scene} />
+                  ),
+                )}
               </div>
             ) : (
-              scenes.map((scene, index) => (
-                <SceneRow
-                  key={scene.id}
-                  scene={scene}
-                  showMediaName={showMediaName}
-                  showSignals={isQuerying}
-                  isTop={isQuerying && index === 0}
-                />
-              ))
+              scenes.map((scene, index) =>
+                isQuerying ? (
+                  <MatchedSceneListRow
+                    key={scene.id}
+                    scene={scene}
+                    rank={index === 0 ? 'top' : 'default'}
+                  />
+                ) : (
+                  <SceneListRow key={scene.id} scene={scene} />
+                ),
+              )
             )
           ) : reanalyzingMedia.length === 0 ? (
             <EmptyState hasAnyCaptions={hasAnyCaptions} isFiltered={isFiltered} />
