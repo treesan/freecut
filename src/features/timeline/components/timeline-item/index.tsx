@@ -15,7 +15,6 @@ import { useTransitionDragStore } from '@/shared/state/transition-drag'
 import { TRANSITION_CONFIGS } from '@/types/transition'
 import { useMediaLibraryStore } from '@/features/timeline/deps/media-library-store'
 import { useCaptionDialogState } from './use-caption-dialog-state'
-import { TranscribeDialogController } from './transcribe-dialog-controller'
 import {
   useTimelineDrag,
   dragOffsetRef,
@@ -31,23 +30,16 @@ import { ClipContent } from './clip-content'
 import { ClipIndicators } from './clip-indicators'
 import { TrimHandles } from './trim-handles'
 import { type ActiveEdgeState } from './trim-constants'
-import { EdgeHalos } from './edge-halos'
-import { TransitionDropGhost } from './transition-drop-ghost'
-import { TrackPushHandle } from './track-push-handle'
 import { StretchHandles } from './stretch-handles'
 import { AudioFadeHandles } from './audio-fade-handles'
 import { VideoFadeHandles } from './video-fade-handles'
 import { AudioVolumeControl } from './audio-volume-control'
 import { JoinIndicators } from './join-indicators'
 import { SegmentStatusOverlays } from './segment-status-overlays'
-import { ToolOperationOverlay } from './tool-operation-overlay'
-import { FloatingReadout } from './floating-readout'
 import { getTimelineItemGestureMode } from './drag-visual-mode'
 import { useDragVisualState } from './use-drag-visual-state'
 import { useTimelineItemActions } from './use-timeline-item-actions'
 import { useTimelineItemDropHandlers } from './use-timeline-item-drop-handlers'
-import { AnchorDragGhost, FollowerDragGhost } from './drag-ghosts'
-import { DragBlockedTooltip } from './drag-blocked-tooltip'
 import { ItemContextMenu } from './item-context-menu'
 import { useSmartTrimHover } from './use-smart-trim-hover'
 import { useContextMenuState } from './use-context-menu-state'
@@ -61,7 +53,6 @@ import { getAudioVisualizationScale, getAudioVolumeLineY } from '../../utils/aud
 import { useFadeEditors } from './use-fade-editors'
 import { useFadeMath } from './use-fade-math'
 import { EDITOR_LAYOUT_CSS_VALUES } from '@/config/editor-layout'
-import { TrimInfoOverlay } from './trim-info-overlay'
 import { getClipCursorClass } from './clip-cursor'
 import { areTimelineItemPropsEqual } from './timeline-item-memo-compare'
 import { useActiveGlobalCursor } from './use-active-global-cursor'
@@ -70,6 +61,7 @@ import { useToolOperationOverlay } from './use-tool-operation-overlay'
 import { useLinkedSyncPreview } from './use-linked-sync-preview'
 import { useClipReadoutLabels } from './use-clip-readout-labels'
 import { useTimelineItemPointerHandlers } from './use-timeline-item-pointer-handlers'
+import { ClipFloatingLayer } from './clip-floating-layer'
 const EMPTY_SEGMENT_OVERLAYS = [] as const
 const EMPTY_LINKED_ITEMS: TimelineItemType[] = []
 
@@ -1248,62 +1240,31 @@ export const TimelineItem = memo(function TimelineItem({
         </div>
       </ItemContextMenu>
 
-      {trimInfoLabel && (
-        <TrimInfoOverlay
-          anchorRef={transformRef}
-          side={trimInfoLabel.side}
-          delta={trimInfoLabel.delta}
-          duration={trimInfoLabel.duration}
-          measureKey={`${visualLeftFrame}:${visualWidthFrames}:${trimInfoLabel.side}:${trimInfoLabel.delta}:${trimInfoLabel.duration}`}
-        />
-      )}
-
-      {moveInfoLabel && (
-        <FloatingReadout
-          anchorRef={transformRef}
-          measureKey={`move:${dragOffset.x}:${dragOffset.y}:${moveInfoLabel}`}
-          offsetY={6}
-        >
-          {moveInfoLabel}
-        </FloatingReadout>
-      )}
-
-      {/* Track push handle - sits in the gap to the LEFT of the clip, outside contain:paint */}
-      <TrackPushHandle
-        enabled={hasGapBefore && !trackLocked && activeTool === 'trim-edit'}
-        isActive={isTrackPushActive}
-        clipLeftStyle={getFramePositionStyle(visualLeftFrame)}
-        zoneStyle={getTrackPushZoneStyle(gapBeforeFrames)}
-        onMouseDown={handleTrackPushStart}
-      />
-
-      <ToolOperationOverlay visual={toolOperationOverlay} />
-
-      {/* Active edge halos - top layer, above both clip and bounds box */}
-      <EdgeHalos
-        activeEdges={activeEdges}
+      <ClipFloatingLayer
+        transformRef={transformRef}
+        ghostRef={ghostRef}
         visualLeftFrame={visualLeftFrame}
         visualWidthFrames={visualWidthFrames}
-      />
-
-      <TransitionDropGhost ghost={transitionDropGhost} />
-
-      {/* Alt-drag ghosts */}
-      <AnchorDragGhost
+        dragOffset={dragOffset}
+        trimInfoLabel={trimInfoLabel}
+        moveInfoLabel={moveInfoLabel}
+        trackPushEnabled={hasGapBefore && !trackLocked && activeTool === 'trim-edit'}
+        isTrackPushActive={isTrackPushActive}
+        trackPushClipLeftStyle={getFramePositionStyle(visualLeftFrame)}
+        trackPushZoneStyle={getTrackPushZoneStyle(gapBeforeFrames)}
+        onTrackPushStart={handleTrackPushStart}
+        toolOperationOverlay={toolOperationOverlay}
+        activeEdges={activeEdges}
+        transitionDropGhost={transitionDropGhost}
         isAltDrag={isAltDrag}
         isDragging={isDragging}
         left={left}
         width={width}
-        dragOffset={dragOffset}
-      />
-      <FollowerDragGhost ref={ghostRef} left={left} width={width} />
-
-      <DragBlockedTooltip hint={pointerHint} />
-      <TranscribeDialogController
+        pointerHint={pointerHint}
         itemMediaId={item.mediaId}
         hasGeneratedCaptions={hasGeneratedCaptions}
         caption={caption}
-        onGenerate={handleCaptionsFromDialog}
+        onGenerateCaption={handleCaptionsFromDialog}
       />
     </>
   )
