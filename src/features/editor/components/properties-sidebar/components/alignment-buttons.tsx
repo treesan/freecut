@@ -83,6 +83,7 @@ export function AlignmentButtons({ onAlign, disabled = false, className }: Align
             className="h-6 w-6"
             onClick={() => onAlign(type)}
             disabled={disabled}
+            aria-label={t(labelKey)}
             data-tooltip={t(labelKey)}
             data-tooltip-side="bottom"
           >
@@ -101,6 +102,7 @@ export function AlignmentButtons({ onAlign, disabled = false, className }: Align
             className="h-6 w-6"
             onClick={() => onAlign(type)}
             disabled={disabled}
+            aria-label={t(labelKey)}
             data-tooltip={t(labelKey)}
             data-tooltip-side="bottom"
           >
@@ -119,6 +121,7 @@ export function AlignmentButtons({ onAlign, disabled = false, className }: Align
             className="h-6 w-6"
             onClick={() => onAlign(type)}
             disabled={disabled}
+            aria-label={t(labelKey)}
             data-tooltip={t(labelKey)}
             data-tooltip-side="bottom"
           >

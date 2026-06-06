@@ -145,7 +145,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 
   // Performance
   maxUndoHistory: 50,
-  autoSaveInterval: 0, // Auto-save disabled by default
+  autoSaveInterval: 5, // Auto-save every 5 min by default — guards against tab crashes / lost work
 
   // Whisper defaults
   defaultWhisperModel: DEFAULT_WHISPER_MODEL,
@@ -285,6 +285,18 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'freecut-settings',
+      version: 1,
+      // v1: auto-save now defaults on. Enable it for anyone persisted under the old
+      // default (0 = disabled) so a crashed or closed tab can't lose a long edit.
+      // After this one-time bump the user's choice is sticky again (toggle in
+      // Settings → General).
+      migrate: (persistedState, version) => {
+        const state = (persistedState as Partial<AppSettings> | undefined) ?? {}
+        if (version < 1 && (state.autoSaveInterval == null || state.autoSaveInterval <= 0)) {
+          return { ...state, autoSaveInterval: 5 }
+        }
+        return state
+      },
       merge: (persistedState, currentState) => {
         const typedState = (persistedState as Partial<AppSettings> | undefined) ?? {}
         const captioningIntervalUnit = normalizeCaptioningIntervalUnit(

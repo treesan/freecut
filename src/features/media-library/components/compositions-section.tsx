@@ -200,7 +200,7 @@ export function CompositionsSection() {
           <span className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
             {t('media.compositions.sectionTitle')}
           </span>
-          <span className="text-[10px] tabular-nums text-muted-foreground/60">
+          <span className="text-[10px] tabular-nums text-muted-foreground">
             {compositions.length}
           </span>
         </CollapsibleTrigger>

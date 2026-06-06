@@ -205,7 +205,7 @@ const MediaTypeGroupBase = memo(function MediaTypeGroupBase({
         <span className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
           {label}
         </span>
-        <span className="text-[10px] tabular-nums text-muted-foreground/60">{items.length}</span>
+        <span className="text-[10px] tabular-nums text-muted-foreground">{items.length}</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-1 pb-2">
         <Grid items={items} onMediaSelect={onMediaSelect} itemSize={itemSize} />

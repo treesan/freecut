@@ -223,7 +223,7 @@ const MiniAudioPlayer = memo(function MiniAudioPlayer({ src }: { src: string }) 
       />
       <span className="shrink-0 select-none font-mono text-[10px] tabular-nums text-muted-foreground">
         {formatTime(currentTime)}
-        <span className="text-muted-foreground/40"> / </span>
+        <span className="text-muted-foreground"> / </span>
         {formatTime(duration)}
       </span>
     </div>

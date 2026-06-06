@@ -749,6 +749,11 @@ export const MediaSidebar = memo(function MediaSidebar() {
                   height: EDITOR_LAYOUT_CSS_VALUES.sidebarHeaderButtonSize,
                 }}
                 onClick={toggleMediaFullColumn}
+                aria-label={
+                  mediaFullColumn
+                    ? t('editor.propertiesSidebar.dockToPreview')
+                    : t('editor.propertiesSidebar.expandFullColumn')
+                }
                 data-tooltip={
                   mediaFullColumn
                     ? t('editor.propertiesSidebar.dockToPreview')

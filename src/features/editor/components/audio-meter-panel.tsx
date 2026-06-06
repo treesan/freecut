@@ -440,7 +440,7 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
       ? 'Scanning'
       : isAudioSkimMeterActive
         ? 'Skim'
-      : formatMeterDb(maxLevel)
+        : formatMeterDb(maxLevel)
   const scanFallbackPercent =
     isMeterActive && estimate.unresolvedSourceCount > 0 && estimate.resolvedSourceCount === 0
       ? 18
@@ -907,7 +907,7 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="h-5 w-5 shrink-0 flex items-center justify-center rounded text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/50 transition-colors"
+          className="h-5 w-5 shrink-0 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           aria-label={t('editor.audioMeters.panelMode')}
         >
           <MoreHorizontal size={14} />
@@ -1097,7 +1097,7 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
 
         <div className="flex-1 px-2 py-3 min-h-0">
           <div className="h-full rounded-md border border-border/50 bg-black/30 px-2 py-3 shadow-[inset_0_1px_4px_rgba(0,0,0,0.4)]">
-            <div className="mb-3 text-center text-[10px] uppercase tracking-[0.22em] text-muted-foreground/70 font-mono">
+            <div className="mb-3 text-center text-[10px] uppercase tracking-[0.22em] text-muted-foreground font-mono">
               Master
             </div>
 
@@ -1109,7 +1109,7 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
                   return (
                     <div key={mark} className="absolute inset-x-0" style={{ bottom }}>
                       <div className="absolute left-0 right-5 h-px bg-border/30" />
-                      <span className="absolute right-0 -translate-y-1/2 text-[10px] font-mono text-muted-foreground/50">
+                      <span className="absolute right-0 -translate-y-1/2 text-[10px] font-mono text-muted-foreground">
                         {mark}
                       </span>
                     </div>
@@ -1173,7 +1173,7 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
                     />
                   </div>
                 </div>
-                <div className="mt-1 flex gap-[3px] text-[8px] font-mono text-muted-foreground/40 justify-center">
+                <div className="mt-1 flex gap-[3px] text-[8px] font-mono text-muted-foreground justify-center">
                   <span className="w-[14px] text-center">L</span>
                   <span className="w-[14px] text-center">R</span>
                 </div>
@@ -1181,7 +1181,7 @@ export const AudioMeterPanel = memo(function AudioMeterPanel() {
             </div>
 
             {/* Peak dB readout */}
-            <div className="mt-3 text-center text-[10px] font-mono text-muted-foreground/70">
+            <div className="mt-3 text-center text-[10px] font-mono text-muted-foreground">
               {statusLabel}
             </div>
           </div>

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Link2, Link2Off } from 'lucide-react'
 import { NumberInput } from './number-input'
 import { cn } from '@/shared/ui/cn'
+import { useTranslation } from 'react-i18next'
 
 type MixedValue = number | 'mixed'
 
@@ -47,6 +48,7 @@ export function LinkedDimensions({
   step = 1,
   className,
 }: LinkedDimensionsProps) {
+  const { t } = useTranslation()
   // Store aspect ratio when lock is engaged
   const aspectRatioRef = useRef<number>(1)
 
@@ -110,6 +112,11 @@ export function LinkedDimensions({
         className={cn('h-7 w-7', aspectLocked && 'text-primary')}
         onClick={onAspectLockToggle}
         disabled={disabled}
+        title={
+          aspectLocked
+            ? t('editor.layoutSection.unlockAspect')
+            : t('editor.layoutSection.lockAspect')
+        }
       >
         {aspectLocked ? <Link2 className="w-3.5 h-3.5" /> : <Link2Off className="w-3.5 h-3.5" />}
       </Button>

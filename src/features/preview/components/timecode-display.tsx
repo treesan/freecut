@@ -98,7 +98,7 @@ export function TimecodeDisplay({ fps, totalFrames }: TimecodeDisplayProps) {
           ? formatFrameNumber(getVisibleFrame())
           : formatTimecodeCompact(getVisibleFrame(), fps)}
       </span>
-      <span className="text-muted-foreground/50">/</span>
+      <span className="text-muted-foreground">/</span>
       <span>
         {showFrames ? formatFrameNumber(lastFrame) : formatTimecodeCompact(lastFrame, fps)}
       </span>
