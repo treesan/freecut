@@ -85,11 +85,6 @@ import { OrphanedClipsDialog } from './orphaned-clips-dialog'
 import { UnsupportedAudioCodecDialog } from './unsupported-audio-codec-dialog'
 import { useFilteredMediaItems, useMediaLibraryStore } from '../stores/media-library-store'
 import {
-  deleteCompoundClips,
-  getCompoundClipDeletionImpact,
-  getMediaDeletionImpact,
-  removeProjectItems,
-  useTimelineStore,
   useCompositionsStore,
   useCompositionNavigationStore,
 } from '@/features/media-library/deps/timeline-stores'
@@ -107,6 +102,7 @@ import { isMarqueeJustFinished } from '@/shared/marquee/use-marquee-selection'
 import { useMediaLibraryMarquee } from './use-media-library-marquee'
 import { useMediaLibraryDragDrop } from './use-media-library-drag-drop'
 import { useMediaTaskProgress } from './use-media-task-progress'
+import { useMediaLibraryDeletion } from './use-media-library-deletion'
 
 function CopyButton({ text }: { text: string }) {
   const { t } = useTranslation()
@@ -208,11 +204,6 @@ interface MediaLibraryProps {
   onMediaSelect?: (mediaId: string) => void
 }
 
-interface PendingLibraryDeletion {
-  mediaIds: string[]
-  compositionIds: string[]
-}
-
 const MEDIA_HEADER_MAX_COMPACT_LEVEL = 4
 const MEDIA_HEADER_OVERFLOW_TOLERANCE_PX = 1
 const MEDIA_HEADER_RELAX_WIDTH_DELTA_PX = 8
@@ -223,13 +214,7 @@ export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaL
   const headerToolbarRef = useRef<HTMLDivElement>(null)
   const headerToolbarWidthRef = useRef(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const isFocusedRef = useRef(false)
   const [headerCompactLevel, setHeaderCompactLevel] = useState(0)
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [pendingDeletion, setPendingDeletion] = useState<PendingLibraryDeletion>({
-    mediaIds: [],
-    compositionIds: [],
-  })
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () => new Set(['video', 'audio', 'image', 'gif']),
   )
@@ -347,9 +332,6 @@ export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaL
   }, [currentProjectId, loadMediaItems, projectStoreProjectId, setCurrentProject])
 
   const selectedAssetCount = selectedMediaIds.length + selectedCompositionIds.length
-  const deleteAssetCount = pendingDeletion.mediaIds.length + pendingDeletion.compositionIds.length
-  const isMediaOnlyDeletion =
-    pendingDeletion.mediaIds.length > 0 && pendingDeletion.compositionIds.length === 0
   const { marquee } = useMediaLibraryMarquee({
     compositions,
     filteredMediaItems,
@@ -357,57 +339,26 @@ export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaL
     setSelection,
   })
 
-  // Track focus scope for the Delete hotkey. Selection itself is only cleared
-  // by explicit user action (empty-area click or marquee), never by focus
-  // changes — otherwise selection leaks away when the user clicks the timeline
-  // or another panel.
-  useEffect(() => {
-    const handleMouseDown = (event: MouseEvent) => {
-      isFocusedRef.current = !!containerRef.current?.contains(event.target as Node)
-    }
-
-    document.addEventListener('mousedown', handleMouseDown, true)
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown, true)
-    }
-  }, [])
-
-  // Handle Delete key to delete selected items
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Only handle Delete key
-      if (event.key !== 'Delete') return
-
-      // Don't trigger if media library is not focused
-      if (!isFocusedRef.current) return
-
-      // Don't trigger if no items selected
-      if (selectedAssetCount === 0) return
-
-      // Don't trigger if dialog is already open
-      if (showDeleteDialog) return
-
-      // Don't trigger if user is typing in an input or textarea
-      const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
-      // Prevent default behavior and trigger delete
-      event.preventDefault()
-      setPendingDeletion({
-        mediaIds: [...selectedMediaIds],
-        compositionIds: [...selectedCompositionIds],
-      })
-      setShowDeleteDialog(true)
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [selectedAssetCount, selectedCompositionIds, selectedMediaIds, showDeleteDialog])
+  const {
+    showDeleteDialog,
+    setShowDeleteDialog,
+    pendingDeletion,
+    setPendingDeletion,
+    deleteAssetCount,
+    isMediaOnlyDeletion,
+    deleteSummary,
+    affectedAssetInstanceCount,
+    handleDeleteSelected,
+    handleConfirmDelete,
+  } = useMediaLibraryDeletion({
+    containerRef,
+    selectedMediaIds,
+    selectedCompositionIds,
+    selectedAssetCount,
+    currentProjectId,
+    clearSelection,
+    deleteMediaBatch,
+  })
 
   // Import files using file picker (instant, no copy)
   const handleImport = async () => {
@@ -592,73 +543,6 @@ export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaL
     selectedProxyEligibleCount,
     t,
   ])
-
-  const deleteSummary = useMemo(() => {
-    const parts: string[] = []
-    if (pendingDeletion.mediaIds.length > 0) {
-      parts.push(t('media.library.mediaItemsCount', { count: pendingDeletion.mediaIds.length }))
-    }
-    if (pendingDeletion.compositionIds.length > 0) {
-      parts.push(
-        t('media.library.compoundClipsCount', { count: pendingDeletion.compositionIds.length }),
-      )
-    }
-    return parts.join(t('media.library.andJoiner'))
-  }, [pendingDeletion.compositionIds.length, pendingDeletion.mediaIds.length, t])
-
-  const affectedMediaImpact = useMemo(
-    () =>
-      pendingDeletion.mediaIds.length > 0
-        ? getMediaDeletionImpact(pendingDeletion.mediaIds)
-        : { itemIds: [], rootReferenceCount: 0, nestedReferenceCount: 0, totalReferenceCount: 0 },
-    [pendingDeletion.mediaIds],
-  )
-  const compoundClipDeleteImpact = useMemo(
-    () =>
-      pendingDeletion.compositionIds.length > 0
-        ? getCompoundClipDeletionImpact(pendingDeletion.compositionIds)
-        : { rootReferenceCount: 0, nestedReferenceCount: 0, totalReferenceCount: 0 },
-    [pendingDeletion.compositionIds],
-  )
-  const affectedAssetInstanceCount =
-    affectedMediaImpact.totalReferenceCount + compoundClipDeleteImpact.totalReferenceCount
-
-  const handleDeleteSelected = () => {
-    if (selectedAssetCount === 0) return
-    // Capture the IDs BEFORE opening dialog (selection may be cleared by click outside)
-    setPendingDeletion({
-      mediaIds: [...selectedMediaIds],
-      compositionIds: [...selectedCompositionIds],
-    })
-    setShowDeleteDialog(true)
-  }
-
-  const handleConfirmDelete = async () => {
-    setShowDeleteDialog(false)
-    try {
-      // First remove timeline items that reference selected library assets
-      if (affectedMediaImpact.itemIds.length > 0) {
-        const removedTimelineReferences = removeProjectItems(affectedMediaImpact.itemIds)
-        if (removedTimelineReferences && currentProjectId) {
-          await useTimelineStore.getState().saveTimeline(currentProjectId)
-        }
-      }
-
-      if (pendingDeletion.mediaIds.length > 0) {
-        await deleteMediaBatch(pendingDeletion.mediaIds)
-      }
-
-      if (pendingDeletion.compositionIds.length > 0) {
-        deleteCompoundClips(pendingDeletion.compositionIds)
-      }
-
-      clearSelection()
-      setPendingDeletion({ mediaIds: [], compositionIds: [] })
-    } catch (error) {
-      logger.error('Delete failed:', error)
-      setPendingDeletion({ mediaIds: [], compositionIds: [] })
-    }
-  }
 
   const handleScrollContentClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
