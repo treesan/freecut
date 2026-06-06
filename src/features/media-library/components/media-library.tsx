@@ -112,11 +112,8 @@ import {
   getTranscriptionStageLabel,
 } from '@/shared/utils/transcription-progress'
 import type { MediaMetadata } from '@/types/storage'
-import {
-  isMarqueeJustFinished,
-  useMarqueeSelection,
-  type MarqueeItem,
-} from '@/shared/marquee/use-marquee-selection'
+import { isMarqueeJustFinished } from '@/shared/marquee/use-marquee-selection'
+import { useMediaLibraryMarquee } from './use-media-library-marquee'
 
 function CopyButton({ text }: { text: string }) {
   const { t } = useTranslation()
@@ -363,119 +360,11 @@ export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaL
   const deleteAssetCount = pendingDeletion.mediaIds.length + pendingDeletion.compositionIds.length
   const isMediaOnlyDeletion =
     pendingDeletion.mediaIds.length > 0 && pendingDeletion.compositionIds.length === 0
-  const previewAssetIdsRef = useRef<string[]>([])
-
-  const setPreviewAssetIds = useCallback((ids: string[]) => {
-    const container = scrollContainerRef.current
-    if (!container) {
-      previewAssetIdsRef.current = ids
-      return
-    }
-
-    const nextIds = new Set(ids)
-    for (const previousId of previewAssetIdsRef.current) {
-      if (nextIds.has(previousId)) {
-        continue
-      }
-
-      if (previousId.startsWith('media:')) {
-        container
-          .querySelector(`[data-media-id="${previousId.slice('media:'.length)}"]`)
-          ?.classList.remove('media-marquee-preview')
-      } else if (previousId.startsWith('composition:')) {
-        container
-          .querySelector(`[data-composition-id="${previousId.slice('composition:'.length)}"]`)
-          ?.classList.remove('composition-marquee-preview')
-      }
-    }
-
-    const previousIds = new Set(previewAssetIdsRef.current)
-    for (const id of ids) {
-      if (previousIds.has(id)) {
-        continue
-      }
-
-      if (id.startsWith('media:')) {
-        container
-          .querySelector(`[data-media-id="${id.slice('media:'.length)}"]`)
-          ?.classList.add('media-marquee-preview')
-      } else if (id.startsWith('composition:')) {
-        container
-          .querySelector(`[data-composition-id="${id.slice('composition:'.length)}"]`)
-          ?.classList.add('composition-marquee-preview')
-      }
-    }
-
-    previewAssetIdsRef.current = ids
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      setPreviewAssetIds([])
-    }
-  }, [setPreviewAssetIds])
-
-  const marqueeItems: MarqueeItem[] = useMemo(
-    () => [
-      ...compositions.map((composition) => ({
-        id: `composition:${composition.id}`,
-        getBoundingRect: () => {
-          const element = scrollContainerRef.current?.querySelector(
-            `[data-composition-id="${composition.id}"]`,
-          )
-          if (!element) return null
-          const rect = element.getBoundingClientRect()
-          return {
-            left: rect.left,
-            top: rect.top,
-            right: rect.right,
-            bottom: rect.bottom,
-            width: rect.width,
-            height: rect.height,
-          }
-        },
-      })),
-      ...filteredMediaItems.map((media) => ({
-        id: `media:${media.id}`,
-        getBoundingRect: () => {
-          const element = scrollContainerRef.current?.querySelector(`[data-media-id="${media.id}"]`)
-          if (!element) return null
-          const rect = element.getBoundingClientRect()
-          return {
-            left: rect.left,
-            top: rect.top,
-            right: rect.right,
-            bottom: rect.bottom,
-            width: rect.width,
-            height: rect.height,
-          }
-        },
-      })),
-    ],
-    [compositions, filteredMediaItems],
-  )
-
-  const { marquee } = useMarqueeSelection({
-    containerRef: scrollContainerRef as React.RefObject<HTMLElement>,
-    items: marqueeItems,
-    enabled: marqueeItems.length > 0,
-    onPreviewSelectionChange: setPreviewAssetIds,
-    commitSelectionOnMouseUp: true,
-    liveCommitThrottleMs: 66,
-    onSelectionChange: (ids) => {
-      const nextMediaIds: string[] = []
-      const nextCompositionIds: string[] = []
-
-      for (const id of ids) {
-        if (id.startsWith('media:')) {
-          nextMediaIds.push(id.slice('media:'.length))
-        } else if (id.startsWith('composition:')) {
-          nextCompositionIds.push(id.slice('composition:'.length))
-        }
-      }
-
-      setSelection({ mediaIds: nextMediaIds, compositionIds: nextCompositionIds })
-    },
+  const { marquee } = useMediaLibraryMarquee({
+    compositions,
+    filteredMediaItems,
+    scrollContainerRef,
+    setSelection,
   })
 
   // Track focus scope for the Delete hotkey. Selection itself is only cleared
