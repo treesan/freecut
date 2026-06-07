@@ -1557,6 +1557,7 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
             variant="ghost"
             size="icon"
             className="h-5 w-5 p-0"
+            aria-label={t('common.close')}
             onClick={(e) => {
               e.stopPropagation()
               onClose()

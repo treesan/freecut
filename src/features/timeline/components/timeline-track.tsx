@@ -1285,7 +1285,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
         {/* Locked track overlay indicator */}
         {isTrackLocked && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            <div className="text-xs text-muted-foreground/50 font-mono">
+            <div className="text-xs text-muted-foreground font-mono">
               {t('timeline.track.locked')}
             </div>
           </div>

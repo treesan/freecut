@@ -214,6 +214,11 @@ export const PropertiesSidebar = memo(function PropertiesSidebar() {
                     height: EDITOR_LAYOUT_CSS_VALUES.sidebarHeaderButtonSize,
                   }}
                   onClick={togglePropertiesFullColumn}
+                  aria-label={
+                    propertiesFullColumn
+                      ? t('editor.propertiesSidebar.dockToPreview')
+                      : t('editor.propertiesSidebar.expandFullColumn')
+                  }
                   data-tooltip={
                     propertiesFullColumn
                       ? t('editor.propertiesSidebar.dockToPreview')
@@ -253,6 +258,7 @@ export const PropertiesSidebar = memo(function PropertiesSidebar() {
                   height: EDITOR_LAYOUT_CSS_VALUES.sidebarHeaderButtonSize,
                 }}
                 onClick={toggleRightSidebar}
+                aria-label={t('editor.mediaSidebar.collapsePanel')}
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </Button>
