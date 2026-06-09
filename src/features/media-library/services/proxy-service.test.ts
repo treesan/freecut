@@ -136,6 +136,35 @@ function createBinaryFile(size: number): MockStoredFile {
   return { size }
 }
 
+function installProxyStorageFixture(options: {
+  proxyKey: string
+  files: Record<string, MockStoredFile>
+  onRemoveEntry?: ReturnType<typeof vi.fn>
+}) {
+  const removeEntry = options.onRemoveEntry ?? vi.fn(async () => undefined)
+  const proxyDirectory = createDirectoryHandle({ files: options.files })
+  const proxyRoot = createDirectoryHandle({
+    directories: {
+      [options.proxyKey]: proxyDirectory,
+    },
+    onRemoveEntry: removeEntry,
+  })
+  const root = createDirectoryHandle({
+    directories: {
+      proxies: proxyRoot,
+    },
+  })
+
+  Object.defineProperty(navigator, 'storage', {
+    configurable: true,
+    value: {
+      getDirectory: vi.fn().mockResolvedValue(root),
+    },
+  })
+
+  return { proxyDirectory, proxyRoot, removeEntry, root }
+}
+
 describe('proxyService.loadExistingProxies', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -162,8 +191,8 @@ describe('proxyService.loadExistingProxies', () => {
   })
 
   it('removes partial output for interrupted proxy generations on startup', async () => {
-    const removeEntry = vi.fn(async () => undefined)
-    const proxyDirectory = createDirectoryHandle({
+    const { removeEntry } = installProxyStorageFixture({
+      proxyKey: 'proxy-video-1',
       files: {
         'meta.json': createJsonFile({
           version: 4,
@@ -174,24 +203,6 @@ describe('proxyService.loadExistingProxies', () => {
           status: 'generating',
           createdAt: 1,
         }),
-      },
-    })
-    const proxyRoot = createDirectoryHandle({
-      directories: {
-        'proxy-video-1': proxyDirectory,
-      },
-      onRemoveEntry: removeEntry,
-    })
-    const root = createDirectoryHandle({
-      directories: {
-        proxies: proxyRoot,
-      },
-    })
-
-    Object.defineProperty(navigator, 'storage', {
-      configurable: true,
-      value: {
-        getDirectory: vi.fn().mockResolvedValue(root),
       },
     })
 
@@ -207,10 +218,11 @@ describe('proxyService.loadExistingProxies', () => {
       'An attempt was made to modify an object where modifications are not allowed.',
       'NoModificationAllowedError',
     )
-    const removeEntry = vi.fn(async () => {
+    const throwingRemoveEntry = vi.fn(async () => {
       throw cleanupError
     })
-    const proxyDirectory = createDirectoryHandle({
+    const { removeEntry } = installProxyStorageFixture({
+      proxyKey: 'proxy-video-readonly',
       files: {
         'meta.json': createJsonFile({
           version: 4,
@@ -222,24 +234,7 @@ describe('proxyService.loadExistingProxies', () => {
           createdAt: 1,
         }),
       },
-    })
-    const proxyRoot = createDirectoryHandle({
-      directories: {
-        'proxy-video-readonly': proxyDirectory,
-      },
-      onRemoveEntry: removeEntry,
-    })
-    const root = createDirectoryHandle({
-      directories: {
-        proxies: proxyRoot,
-      },
-    })
-
-    Object.defineProperty(navigator, 'storage', {
-      configurable: true,
-      value: {
-        getDirectory: vi.fn().mockResolvedValue(root),
-      },
+      onRemoveEntry: throwingRemoveEntry,
     })
 
     const { proxyService } = await import('./proxy-service')
@@ -257,8 +252,8 @@ describe('proxyService.loadExistingProxies', () => {
   })
 
   it('cleans failed proxies without auto-retrying them on startup', async () => {
-    const removeEntry = vi.fn(async () => undefined)
-    const proxyDirectory = createDirectoryHandle({
+    const { removeEntry } = installProxyStorageFixture({
+      proxyKey: 'proxy-video-2',
       files: {
         'meta.json': createJsonFile({
           version: 4,
@@ -271,24 +266,6 @@ describe('proxyService.loadExistingProxies', () => {
         }),
       },
     })
-    const proxyRoot = createDirectoryHandle({
-      directories: {
-        'proxy-video-2': proxyDirectory,
-      },
-      onRemoveEntry: removeEntry,
-    })
-    const root = createDirectoryHandle({
-      directories: {
-        proxies: proxyRoot,
-      },
-    })
-
-    Object.defineProperty(navigator, 'storage', {
-      configurable: true,
-      value: {
-        getDirectory: vi.fn().mockResolvedValue(root),
-      },
-    })
 
     const { proxyService } = await import('./proxy-service')
     proxyService.setProxyKey('video-2', 'proxy-video-2')
@@ -298,8 +275,8 @@ describe('proxyService.loadExistingProxies', () => {
   })
 
   it('requeues ready proxies whose file payload is empty', async () => {
-    const removeEntry = vi.fn(async () => undefined)
-    const proxyDirectory = createDirectoryHandle({
+    const { removeEntry } = installProxyStorageFixture({
+      proxyKey: 'proxy-video-3',
       files: {
         'meta.json': createJsonFile({
           version: 4,
@@ -311,24 +288,6 @@ describe('proxyService.loadExistingProxies', () => {
           createdAt: 1,
         }),
         'proxy.mp4': createBinaryFile(0),
-      },
-    })
-    const proxyRoot = createDirectoryHandle({
-      directories: {
-        'proxy-video-3': proxyDirectory,
-      },
-      onRemoveEntry: removeEntry,
-    })
-    const root = createDirectoryHandle({
-      directories: {
-        proxies: proxyRoot,
-      },
-    })
-
-    Object.defineProperty(navigator, 'storage', {
-      configurable: true,
-      value: {
-        getDirectory: vi.fn().mockResolvedValue(root),
       },
     })
 

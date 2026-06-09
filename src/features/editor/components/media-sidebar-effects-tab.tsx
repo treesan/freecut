@@ -1,15 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, type DragEvent } from 'react'
+import { memo, useCallback, useEffect, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Layers, Sparkles } from 'lucide-react'
 import { useTimelineStore } from '@/features/editor/deps/timeline-store'
 import { useSelectionStore } from '@/shared/state/selection'
 import type { VisualEffect, GpuEffect } from '@/types/effects'
 import { EFFECT_PRESETS } from '@/types/effects'
-import {
-  getGpuCategoriesWithEffects,
-  getGpuEffectDefaultParams,
-} from '@/infrastructure/gpu-effects'
-import { useEffectPreviews } from '@/features/editor/deps/effects-contract'
+import { getGpuEffectDefaultParams } from '@/infrastructure/gpu-effects'
+import { useGpuEffectPreviewData } from '@/features/editor/deps/effects-contract'
 
 interface MediaSidebarEffectsTabProps {
   onAddAdjustmentLayer: (effects?: VisualEffect[], label?: string) => void
@@ -29,19 +26,7 @@ export const MediaSidebarEffectsTab = memo(function MediaSidebarEffectsTab({
   shouldSuppressGeneratedItemClick,
 }: MediaSidebarEffectsTabProps) {
   const { t } = useTranslation()
-  const gpuCategories = useMemo(() => getGpuCategoriesWithEffects(), [])
-  const allEffectEntries = useMemo(
-    () =>
-      gpuCategories.flatMap(({ effects: catEffects }) =>
-        catEffects.map((def) => ({ id: def.id, def })),
-      ),
-    [gpuCategories],
-  )
-  const presetIds = useMemo(() => EFFECT_PRESETS.map((p) => p.id), [])
-  const { previews: effectPreviews, trigger: triggerPreviews } = useEffectPreviews(
-    allEffectEntries,
-    presetIds,
-  )
+  const { gpuCategories, effectPreviews, triggerPreviews } = useGpuEffectPreviewData()
 
   useEffect(() => {
     triggerPreviews()

@@ -6,6 +6,7 @@ import type {
   TextItem,
   VideoItem,
 } from '@/types/timeline'
+import { resetTimelineItemsTestState } from '@/features/timeline/test-helpers'
 import { useItemsStore } from './items-store'
 import { selectReplaceableCaptionClipIds } from './items-store-indexes'
 import { useTimelineSettingsStore } from './timeline-settings-store'
@@ -90,9 +91,7 @@ function makeShapeItem(overrides: Partial<ShapeItem> = {}): ShapeItem {
 
 describe('items-store rate stretch', () => {
   beforeEach(() => {
-    useTimelineSettingsStore.setState({ fps: 30 })
-    useItemsStore.getState().setItems([])
-    useItemsStore.getState().setTracks([])
+    resetTimelineItemsTestState()
   })
 
   it('preserves explicit source bounds for split clips', () => {
@@ -540,9 +539,7 @@ describe('items-store rate stretch', () => {
 
 describe('items-store indexes', () => {
   beforeEach(() => {
-    useTimelineSettingsStore.setState({ fps: 30 })
-    useItemsStore.getState().setItems([])
-    useItemsStore.getState().setTracks([])
+    resetTimelineItemsTestState()
   })
 
   it('indexes legacy generated captions as replaceable for their containing clip', () => {
@@ -648,9 +645,7 @@ describe('items-store shape mask normalization', () => {
 
 describe('rolling edit', () => {
   beforeEach(() => {
-    useTimelineSettingsStore.setState({ fps: 30 })
-    useItemsStore.getState().setItems([])
-    useItemsStore.getState().setTracks([])
+    resetTimelineItemsTestState()
   })
 
   it('moves edit point right between adjacent same-track clips (positive delta)', () => {
