@@ -53,7 +53,9 @@ async function stashRootFolderHandle(project: Project): Promise<SerializedProjec
     })
   } else {
     // Ensure stale registry entries are cleaned when the project drops its folder.
-    await deleteHandle('project-folder', project.id).catch(() => {})
+    await deleteHandle('project-folder', project.id).catch((error) => {
+      logger.warn(`Failed to clean project-folder handle for ${project.id}`, error)
+    })
   }
   return rest
 }
@@ -183,7 +185,9 @@ export async function deleteProject(id: string): Promise<void> {
   const root = requireWorkspaceRoot()
   try {
     await removeEntry(root, projectDir(id), { recursive: true })
-    await deleteHandle('project-folder', id).catch(() => {})
+    await deleteHandle('project-folder', id).catch((error) => {
+      logger.warn(`Failed to clean project-folder handle for ${id}`, error)
+    })
     await refreshIndex(root)
   } catch (error) {
     logger.error(`deleteProject(${id}) failed`, error)

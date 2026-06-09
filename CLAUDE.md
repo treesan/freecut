@@ -102,10 +102,17 @@ src/
 
 - `VITE_SHOW_DEBUG_PANEL=false` — set to hide debug panel in dev mode (shown by default)
 
+## Toolchain & dependency notes
+
+- The entire dev/build/test/lint/format stack runs through **vite-plus** (`vp`, currently 0.x / pre-1.0) — it wraps Vite, Vitest, Oxlint, Oxfmt and the task runner. There is no plain-Vite fallback configured; if `vp` breaks, pin the last working version in package.json rather than attempting an ad-hoc migration
+- `onnxruntime-web` is intentionally pinned to a **dev build** (`1.26.0-dev.*`) — introduced with the supertonic TTS integration. Don't "upgrade" it casually; moving to a stable release requires re-validating transcription, TTS and scene detection
+- `lucide-react` is held at 0.468.x deliberately (Vite pre-bundles it; see Gotchas about `optimizeDeps`). A major-version bump is a deliberate task, not a routine dep update
+- All production deps are exact-pinned; keep new deps exact-pinned too (no `^`/`~`)
+
 ## Git
 
-- `main` — production, `develop` — active development
-- PR target: `main`
+- `main` — production, `staging` — pre-release integration, `develop` — active development
+- PR target: `staging` (feature branches and `develop` PR into `staging`; `staging` is promoted to `main` for release). Do **not** open PRs against `main` directly
 - Commit messages: conventional commits — `type(scope): description` (e.g. `fix(timeline):`, `feat(export):`)
 
 ## Gotchas

@@ -38,6 +38,7 @@ coverage
 # Misc
 .cache
 .temp
+.hermes/
 
 *.mp4
 

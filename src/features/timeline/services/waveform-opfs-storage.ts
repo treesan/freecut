@@ -180,7 +180,9 @@ class WaveformOPFSStorage {
         }
 
         for (const name of entries) {
-          await dir.removeEntry(name).catch(() => {})
+          await dir.removeEntry(name).catch((error) => {
+            logger.warn(`Failed to remove stale waveform cache file ${name}`, error)
+          })
         }
 
         migration.markComplete()
@@ -759,7 +761,9 @@ class WaveformOPFSStorage {
       }
       // RangeError means corrupted/old format data - silently delete so it regenerates
       if (error instanceof RangeError) {
-        await this.delete(mediaId).catch(() => {})
+        await this.delete(mediaId).catch((deleteError) => {
+          logger.warn(`Failed to delete corrupted waveform cache for ${mediaId}`, deleteError)
+        })
         return null
       }
       logger.error(`Failed to get waveform level ${levelIndex} for ${mediaId}:`, error)
@@ -813,7 +817,9 @@ class WaveformOPFSStorage {
     } catch (error) {
       // RangeError means corrupted/old format data - silently delete so it regenerates
       if (error instanceof RangeError) {
-        await this.delete(mediaId).catch(() => {})
+        await this.delete(mediaId).catch((deleteError) => {
+          logger.warn(`Failed to delete corrupted waveform cache for ${mediaId}`, deleteError)
+        })
         return null
       }
       logger.error(`Failed to get waveform range for ${mediaId}:`, error)

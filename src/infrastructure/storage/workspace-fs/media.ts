@@ -32,7 +32,9 @@ async function stashFileHandle(media: MediaMetadata): Promise<SerializedMedia> {
       lastSeenMtime: media.fileLastModified,
     })
   } else {
-    await deleteHandle('media', media.id).catch(() => {})
+    await deleteHandle('media', media.id).catch((error) => {
+      logger.warn(`Failed to clean media handle for ${media.id}`, error)
+    })
   }
   return rest
 }
@@ -208,7 +210,9 @@ export async function deleteMedia(id: string): Promise<void> {
   const root = requireWorkspaceRoot()
   try {
     await removeEntry(root, mediaDir(id), { recursive: true })
-    await deleteHandle('media', id).catch(() => {})
+    await deleteHandle('media', id).catch((error) => {
+      logger.warn(`Failed to clean media handle for ${id}`, error)
+    })
   } catch (error) {
     logger.error(`deleteMedia(${id}) failed`, error)
     throw new Error(`Failed to delete media: ${id}`)

@@ -209,7 +209,9 @@ async function main() {
     })
   })
 
-  await new Promise((resolve) => server.listen(port, resolve))
+  // Bind to loopback only — the render service has no auth, so exposing it
+  // on the network would let any LAN peer render/edit projects and read media.
+  await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve))
   console.log(`FreeCut render service on http://localhost:${port}  (workspace: ${workspace})`)
   console.log(`  GET /health  GET /projects  POST /render  POST /edit`)
 
