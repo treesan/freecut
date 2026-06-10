@@ -38,24 +38,6 @@ export interface ActiveTransition {
   cutPoint: number
 }
 
-/**
- * Pre-resolved transition windows for fast per-frame lookups.
- * Build once per render, then reuse for every frame.
- */
-export interface TransitionFrameIndex {
-  windows: ReturnType<
-    typeof import('@/shared/timeline/transitions/transition-planner').resolveTransitionWindows
-  >
-}
-
-/**
- * Transition data needed for one frame.
- */
-export interface TransitionFrameState {
-  activeTransitions: ActiveTransition[]
-  transitionClipIds: Set<string>
-}
-
 // ============================================================================
 // Transition Presentation Renderers
 // ============================================================================

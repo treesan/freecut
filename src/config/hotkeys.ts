@@ -93,7 +93,7 @@ export const HOTKEYS = {
 export type HotkeyKey = keyof typeof HOTKEYS
 export type HotkeyBindingMap = Record<HotkeyKey, string>
 export type HotkeyOverrideMap = Partial<Record<HotkeyKey, string>>
-export type HotkeyPlatform = 'mac' | 'windows'
+type HotkeyPlatform = 'mac' | 'windows'
 
 export const HOTKEY_EXPORT_SCHEMA = 'freecut-hotkeys'
 export const HOTKEY_EXPORT_VERSION = 1
@@ -114,7 +114,7 @@ export interface HotkeyExportDocument {
   overrides: HotkeyOverrideMap
 }
 
-export interface HotkeyImportCommand {
+interface HotkeyImportCommand {
   id?: string
   key?: string
   label?: string

@@ -6,7 +6,7 @@ import {
   type BuiltInAnimatableProperty,
 } from '@/types/keyframe'
 
-export interface PropertyValueRange {
+interface PropertyValueRange {
   property: AnimatableProperty
   min: number
   max: number
