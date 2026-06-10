@@ -1,9 +1,1 @@
-export {
-  easeIn,
-  easeOut,
-  easeInOut,
-  cubicBezier,
-  springEasing,
-  applyEasing,
-  applyEasingConfig,
-} from '@/shared/utils/easing'
+export { applyEasing, applyEasingConfig } from '@/shared/utils/easing'
