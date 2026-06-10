@@ -259,17 +259,3 @@ export function createFrameCompositionSceneCache(): FrameCompositionSceneCache {
     },
   }
 }
-
-const defaultFrameSceneCache = createFrameCompositionSceneCache()
-
-export function resolveFrameCompositionSceneCached(
-  params: Parameters<typeof resolveFrameCompositionScene>[0],
-  revision?: unknown,
-): FrameCompositionScene {
-  return defaultFrameSceneCache.resolve(params, revision)
-}
-
-/** Invalidate the default cached scene (call when composition structure changes). */
-export function invalidateFrameSceneCache(): void {
-  defaultFrameSceneCache.invalidate()
-}
