@@ -4,7 +4,7 @@ import {
   clampToAvoidBlockedRanges,
 } from '@/features/keyframes/components/dopesheet-editor/frame-utils'
 
-export interface HeaderFrameSummaryState {
+interface HeaderFrameSummaryState {
   hasMixedFrames: boolean
   localFrame: number | null
   globalFrame: number | null

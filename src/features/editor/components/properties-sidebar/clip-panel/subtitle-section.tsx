@@ -43,7 +43,7 @@ interface CanvasContext {
   height: number
 }
 
-export interface SubtitleSectionPropsWithCanvas extends SubtitleSectionProps {
+interface SubtitleSectionPropsWithCanvas extends SubtitleSectionProps {
   canvas?: CanvasContext
 }
 

@@ -12,13 +12,11 @@
 export type {
   CanvasSettings,
   ItemTransform,
-  RenderImageSource,
   WorkerLoadedImage,
   ItemRenderContext,
   SubCompRenderData,
   GpuTextTextureCacheEntry,
   GpuBitmapMaskTextureCacheEntry,
-  TransitionParticipantRenderState,
 } from './types'
 
 export { renderItem } from './render-item'

@@ -36,7 +36,7 @@ export interface AudioMixerTrack {
   itemIds: string[] // item IDs on this track (for live gain during fader drag)
 }
 
-export interface AudioMixerViewProps {
+interface AudioMixerViewProps {
   tracks: AudioMixerTrack[]
   perTrackLevels: Map<
     string,

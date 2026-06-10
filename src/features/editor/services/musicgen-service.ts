@@ -377,6 +377,6 @@ class MusicgenService {
 }
 
 export { DEFAULT_MUSICGEN_MODEL, MUSICGEN_MODEL_OPTIONS }
-export type { GenerateMusicOptions, MusicgenModelId }
+export type { MusicgenModelId }
 
 export const musicgenService = new MusicgenService()
