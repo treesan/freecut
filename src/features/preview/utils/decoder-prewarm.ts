@@ -182,6 +182,18 @@ function ensureWorkerPool(): void {
   decoderPrewarmMetrics.poolSize = workerPool.length
 }
 
+/**
+ * Eagerly spawn the worker pool (each worker preloads mediabunny WASM on
+ * creation) so the first real preseek of a session doesn't pay worker spawn +
+ * WASM load on top of the decode. Safe to call repeatedly — the pool is a
+ * module singleton. Called from the preview's idle-time warmup alongside the
+ * fast-scrub renderer.
+ */
+export function warmDecoderPrewarmWorkerPool(): void {
+  if (typeof Worker === 'undefined') return
+  ensureWorkerPool()
+}
+
 /** Acquire the least-busy worker from the pool. */
 function acquireWorker(): PoolWorker | null {
   ensureWorkerPool()

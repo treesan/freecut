@@ -45,7 +45,14 @@ import {
   collectVisibleTrackVideoSourceTimesBySrc,
   getVideoItemSourceTimeSeconds,
   resolvePausedVariableSpeedPrewarmPlan,
+  shouldRunJumpPreseek,
 } from '../utils/render-pump-preseek'
+import {
+  beginPlaybackColdStart,
+  cancelPlaybackColdStart,
+  markPlaybackColdStart,
+} from '../utils/playback-cold-start-event'
+import { getPreviewAudioContextState } from '@/features/preview/deps/composition-runtime'
 import {
   resolveBoundarySourcePrewarmCacheUpdate,
   resolvePrewarmFrameQueueAfterEnqueue,
@@ -897,20 +904,38 @@ export function usePreviewRenderPump({
       playbackRafId = requestAnimationFrame(playbackRafPump)
     }
 
-    // Threshold for triggering background worker preseek on large jumps.
-    // Below this threshold, mediabunny sequential advance is fast (~1ms).
-    // Above it, a keyframe seek is needed (300-600ms) — the worker does it off-thread.
-    const JUMP_PRESEEK_THRESHOLD_FRAMES = Math.round(fps * 3)
-
     // Playback store handlers are kept separate so the subscription reads like
-    // the runtime state machine: preseek, lifecycle, transition upkeep,
-    // paused prewarm, then target-frame routing. That ordering matters because
-    // later handlers intentionally build on side effects from earlier ones.
+    // the runtime state machine: cold-start tracking, preseek, lifecycle,
+    // transition upkeep, paused prewarm, then target-frame routing. That
+    // ordering matters because later handlers intentionally build on side
+    // effects from earlier ones.
+    const trackPlaybackColdStartLifecycle = (
+      state: PlaybackStoreSnapshot,
+      prev: PlaybackStoreSnapshot,
+    ) => {
+      if (state.isPlaying && !prev.isPlaying) {
+        beginPlaybackColdStart({
+          startFrame: state.currentFrame,
+          forceFastScrubOverlay,
+          audioContextState: getPreviewAudioContextState(),
+        })
+      } else if (!state.isPlaying && prev.isPlaying) {
+        // No-op if the measurement already resolved on a frame advance.
+        cancelPlaybackColdStart('paused_before_first_frame_advance')
+      }
+    }
+
+    // Direction-aware preseek: small forward jumps ride mediabunny sequential
+    // advance (~1ms/frame), but large forward jumps and most backward jumps
+    // need an off-thread keyframe seek (300-600ms) - see shouldRunJumpPreseek.
     const handleLargeJumpPreseek = (state: PlaybackStoreSnapshot, prev: PlaybackStoreSnapshot) => {
       if (
-        state.currentFrame === prev.currentFrame ||
-        Math.abs(state.currentFrame - prev.currentFrame) < JUMP_PRESEEK_THRESHOLD_FRAMES ||
-        state.isPlaying
+        !shouldRunJumpPreseek({
+          prevFrame: prev.currentFrame,
+          nextFrame: state.currentFrame,
+          fps,
+          isPlaying: state.isPlaying,
+        })
       ) {
         return
       }
@@ -954,8 +979,10 @@ export function usePreviewRenderPump({
         )
 
         if (prewarmItemIds.length > 0) {
+          markPlaybackColdStart({ variable_speed_items: prewarmItemIds.length })
           playbackPrewarmInFlight = true
           void (async () => {
+            const prewarmGateStartMs = performance.now()
             const renderer = await ensureFastScrubRenderer()
             if (renderer && 'prewarmItems' in renderer) {
               const needsPrewarm = prewarmItemIds.filter((id) => !pausePrewarmedItemIds.has(id))
@@ -963,6 +990,9 @@ export function usePreviewRenderPump({
                 await renderer.prewarmItems?.(needsPrewarm, frame)
               }
             }
+            markPlaybackColdStart({
+              prewarm_gate_ms: Math.round(performance.now() - prewarmGateStartMs),
+            })
             pausePrewarmedItemIds.clear()
             playbackPrewarmInFlight = false
             if (playbackRafId === null && usePlaybackStore.getState().isPlaying) {
@@ -1447,6 +1477,7 @@ export function usePreviewRenderPump({
     }
 
     const unsubscribe = usePlaybackStore.subscribe((state, prev) => {
+      trackPlaybackColdStartLifecycle(state, prev)
       handleLargeJumpPreseek(state, prev)
       handlePlaybackLifecycleUpdate(state, prev)
       handleActivePlaybackTransitionMaintenance(state)

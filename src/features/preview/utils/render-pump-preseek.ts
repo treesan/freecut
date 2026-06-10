@@ -243,3 +243,38 @@ export function resolvePausedVariableSpeedPrewarmPlan(
     preseekFrame: Math.max(timelineFrame, visibilityFrame - 1),
   }
 }
+
+/**
+ * Seconds of forward jump below which mediabunny's sequential advance is fast
+ * enough (~1ms/frame) that a background worker preseek isn't worth queuing.
+ */
+export const JUMP_PRESEEK_FORWARD_THRESHOLD_SECONDS = 3
+/**
+ * Seconds of backward jump above which a worker preseek is queued. Backward
+ * jumps can't ride sequential advance — mediabunny must seek to the previous
+ * keyframe and decode forward (300-600ms), so the threshold is much smaller
+ * than the forward one.
+ */
+export const JUMP_PRESEEK_BACKWARD_THRESHOLD_SECONDS = 0.5
+
+/**
+ * Decide whether a paused playhead jump should queue a background worker
+ * preseek for the visible sources at the target frame. Direction-aware: only
+ * large forward jumps need worker help, but most backward jumps do.
+ */
+export function shouldRunJumpPreseek(input: {
+  prevFrame: number
+  nextFrame: number
+  fps: number
+  isPlaying: boolean
+}): boolean {
+  if (input.isPlaying) return false
+  const deltaFrames = input.nextFrame - input.prevFrame
+  if (deltaFrames === 0) return false
+  const thresholdSeconds =
+    deltaFrames > 0
+      ? JUMP_PRESEEK_FORWARD_THRESHOLD_SECONDS
+      : JUMP_PRESEEK_BACKWARD_THRESHOLD_SECONDS
+  const thresholdFrames = Math.max(1, Math.round(input.fps * thresholdSeconds))
+  return Math.abs(deltaFrames) >= thresholdFrames
+}

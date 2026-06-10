@@ -25,6 +25,7 @@ import {
   collectVisibleTrackVideoSourceTimesBySrc,
   getVideoItemSourceTimeSeconds,
   resolvePausedVariableSpeedPrewarmPlan,
+  shouldRunJumpPreseek,
 } from './render-pump-preseek'
 
 function makeVideoItem(overrides: Partial<VideoItem> = {}): VideoItem {
@@ -356,5 +357,53 @@ describe('render pump preseek helpers', () => {
     ]
 
     expect(resolvePausedVariableSpeedPrewarmPlan(tracks, 100, 30)).toBeNull()
+  })
+})
+
+describe('shouldRunJumpPreseek', () => {
+  const fps = 30
+
+  it('never preseeks during playback', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 600, fps, isPlaying: true })).toBe(false)
+  })
+
+  it('never preseeks when the frame did not change', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 90, nextFrame: 90, fps, isPlaying: false })).toBe(
+      false,
+    )
+  })
+
+  it('skips forward jumps under 3 seconds (sequential advance is cheap)', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 89, fps, isPlaying: false })).toBe(false)
+  })
+
+  it('preseeks forward jumps of 3 seconds or more', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 90, fps, isPlaying: false })).toBe(true)
+  })
+
+  it('preseeks backward jumps of 0.5 seconds or more', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 90, nextFrame: 75, fps, isPlaying: false })).toBe(true)
+  })
+
+  it('skips tiny backward jumps under 0.5 seconds', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 90, nextFrame: 76, fps, isPlaying: false })).toBe(
+      false,
+    )
+  })
+
+  it('uses fps to scale thresholds', () => {
+    // 60fps: forward threshold 180 frames, backward threshold 30 frames
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 179, fps: 60, isPlaying: false })).toBe(
+      false,
+    )
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 180, fps: 60, isPlaying: false })).toBe(
+      true,
+    )
+    expect(
+      shouldRunJumpPreseek({ prevFrame: 180, nextFrame: 150, fps: 60, isPlaying: false }),
+    ).toBe(true)
+    expect(
+      shouldRunJumpPreseek({ prevFrame: 180, nextFrame: 151, fps: 60, isPlaying: false }),
+    ).toBe(false)
   })
 })

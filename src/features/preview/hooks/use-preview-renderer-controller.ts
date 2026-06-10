@@ -33,6 +33,7 @@ import {
   blobToDataUrl,
 } from '../utils/preview-constants'
 import { setActivePreviewScrubbingCache } from '../utils/preview-scrubbing-cache-bridge'
+import { warmDecoderPrewarmWorkerPool } from '../utils/decoder-prewarm'
 import { collectVisualInvalidationRanges } from '../utils/preview-frame-invalidation'
 import {
   isFrameInRanges,
@@ -1128,11 +1129,17 @@ export function usePreviewRendererController({
 
   useEffect(() => {
     if (!FAST_SCRUB_RENDERER_ENABLED || isResolving) return
-    if (scrubRendererRef.current || scrubInitPromiseRef.current) return
 
     let cancelled = false
     const warmup = () => {
-      if (cancelled || scrubRendererRef.current || scrubInitPromiseRef.current) return
+      if (cancelled) return
+      // Spawn the preseek worker pool so the first seek of the session
+      // doesn't pay worker spawn + WASM load. Deliberately outside the
+      // renderer guard below: on projects with a transition at the playhead,
+      // ensureFastScrubRenderer() is already in flight before this idle
+      // callback fires, and the pool must still warm.
+      warmDecoderPrewarmWorkerPool()
+      if (scrubRendererRef.current || scrubInitPromiseRef.current) return
       void ensureFastScrubRenderer()
     }
 

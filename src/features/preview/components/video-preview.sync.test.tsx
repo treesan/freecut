@@ -377,6 +377,7 @@ vi.mock('@/features/preview/deps/composition-runtime', () => ({
     return <div data-testid="mock-player-frame">{String(mockedPlayerFrame)}</div>
   },
   getBestDomVideoElementForItem: vi.fn(() => null),
+  getPreviewAudioContextState: vi.fn(() => null),
   hasCornerPin: vi.fn(
     (
       pin:

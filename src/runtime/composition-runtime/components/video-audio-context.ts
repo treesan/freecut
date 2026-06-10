@@ -19,6 +19,7 @@ import type { ResolvedAudioEqSettings } from '@/types/audio'
 import {
   createPreviewClipAudioGraph,
   getSharedPreviewAudioContext,
+  peekSharedPreviewAudioContext,
   rampPreviewClipEq,
   rampPreviewClipGain,
   setPreviewClipEq,
@@ -98,6 +99,14 @@ export function ensureAudioContextResumed(): void {
   if (sharedPreviewContext?.state === 'suspended') {
     sharedPreviewContext.resume()
   }
+}
+
+/**
+ * State of the shared preview AudioContext without creating one — `null` when
+ * no context exists yet. Used by playback cold-start instrumentation.
+ */
+export function getPreviewAudioContextState(): AudioContextState | null {
+  return peekSharedPreviewAudioContext()?.state ?? null
 }
 
 /** Expose connected-element tracking for use by video-content acquisition logic. */
