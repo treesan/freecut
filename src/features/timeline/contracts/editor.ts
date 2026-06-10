@@ -19,12 +19,11 @@ export { KeyframeGraphPanel } from '../components/keyframe-graph-panel'
 export { useTimelineShortcuts } from '../hooks/use-timeline-shortcuts'
 export { useTransitionBreakageNotifications } from '../hooks/use-transition-breakage-notifications'
 export { findNearestAvailableSpace } from '../utils/collision-utils'
-export { areFramesAligned, getMaxTransitionDurationForHandles } from '../utils/transition-utils'
+export { getMaxTransitionDurationForHandles } from '../utils/transition-utils'
 export { resolveTransitionTargetFromSelection } from '../utils/transition-targets'
 export {
   createDefaultAdjustmentItem,
   createDefaultShapeItem,
-  createDefaultTextItem,
   createTextTemplateItem,
   getDefaultGeneratedLayerDurationInFrames,
 } from '../utils/generated-layer-items'
@@ -39,7 +38,6 @@ export { initTransitionChainSubscription } from '../stores/transition-chain-stor
 export const importGifFrameCache = () => import('../services/gif-frame-cache')
 export const importFilmstripCache = () => import('../services/filmstrip-cache')
 export const importWaveformCache = () => import('../services/waveform-cache')
-export const importKeyframeGraphPanel = () => import('../components/keyframe-graph-panel')
 export const importBentoLayoutDialog = () => import('../components/bento-layout-dialog')
 export const importReverseConformDialog = () => import('../components/reverse-conform-dialog')
 export const importSilenceRemovalDialog = () => import('../components/silence-removal-dialog')
