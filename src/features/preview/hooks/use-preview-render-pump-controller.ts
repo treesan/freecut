@@ -4,7 +4,9 @@ import type { PlayerRef } from '@/features/preview/deps/player-core'
 import { getGlobalVideoSourcePool } from '@/features/preview/deps/player-pool'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { usePreviewBridgeStore } from '@/shared/state/preview-bridge'
-import type { TimelineItem, TimelineTrack } from '@/types/timeline'
+import { useCompositionsStore } from '@/features/preview/deps/timeline-store'
+import { blobUrlManager } from '@/infrastructure/browser/blob-url-manager'
+import type { TimelineItem, TimelineTrack, VideoItem } from '@/types/timeline'
 import type { ResolvedTransitionWindow } from '@/shared/timeline/transitions/transition-planner'
 import { useGizmoStore } from '../stores/gizmo-store'
 import { useCornerPinStore } from '../stores/corner-pin-store'
@@ -925,6 +927,19 @@ export function usePreviewRenderPump({
       }
     }
 
+    // Let jump preseek see through compound clips (resolve the referenced
+    // sub-composition) and resolve current-session URLs by mediaId — stored
+    // item src is empty or a stale blob URL on workspace projects, for
+    // main-timeline and sub-comp items alike.
+    const resolvePreseekComposition = (compositionId: string) => {
+      const comp = useCompositionsStore.getState().compositions.find((c) => c.id === compositionId)
+      return comp ? { fps: comp.fps, items: comp.items } : null
+    }
+    const resolvePreseekItemSrc = (item: VideoItem) => {
+      const liveUrl = item.mediaId ? blobUrlManager.get(item.mediaId) : null
+      return liveUrl ?? (item.src || null)
+    }
+
     // Direction-aware preseek: small forward jumps ride mediabunny sequential
     // advance (~1ms/frame), but large forward jumps and most backward jumps
     // need an off-thread keyframe seek (300-600ms) - see shouldRunJumpPreseek.
@@ -943,6 +958,8 @@ export function usePreviewRenderPump({
       runBatchPreseek(
         collectVisibleTrackVideoSourceTimesBySrc(combinedTracks, state.currentFrame, fps, {
           requireExplicitSourceFps: true,
+          resolveComposition: resolvePreseekComposition,
+          resolveItemSrc: resolvePreseekItemSrc,
         }),
       )
     }

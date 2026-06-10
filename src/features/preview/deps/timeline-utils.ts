@@ -17,4 +17,5 @@ export {
   shouldCommitScrubFrame,
   type ScrubThrottleState,
 } from './timeline-contract'
+export { timelineToSourceFrames } from './timeline-contract'
 export { useWaveform } from './timeline-contract'

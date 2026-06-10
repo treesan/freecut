@@ -25,6 +25,7 @@ export { performInsertEdit, performOverwriteEdit } from '../stores/actions/sourc
 export { resolveSourceEditTrackTargets } from '../utils/source-edit-targeting'
 export { getTrackKind } from '../utils/classic-tracks'
 export { createClassicTrack } from '../utils/classic-tracks'
+export { timelineToSourceFrames } from '../utils/source-calculations'
 export { useCompositionsStore } from '../stores/compositions-store'
 export type { SubComposition } from '../stores/compositions-store'
 export { useCompositionNavigationStore } from '../stores/composition-navigation-store'
