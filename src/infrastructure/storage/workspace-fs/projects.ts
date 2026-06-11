@@ -15,7 +15,14 @@ import { createLogger } from '@/shared/logging/logger'
 import { getHandle, saveHandle, deleteHandle } from '@/infrastructure/storage/handles-db'
 
 import { requireWorkspaceRoot } from './root'
-import { exists, listDirectory, readJson, removeEntry, writeJsonAtomic } from './fs-primitives'
+import {
+  exists,
+  listDirectory,
+  readJson,
+  removeEntry,
+  writeJsonAtomic,
+  WorkspaceFileCorruptError,
+} from './fs-primitives'
 import { PROJECTS_DIR, projectDir, projectJsonPath, projectTrashedMarkerPath } from './paths'
 import {
   readWorkspaceIndex,
@@ -84,7 +91,14 @@ async function rebuildIndex(root: FileSystemDirectoryHandle): Promise<WorkspaceI
     // Trashed projects are invisible to `getAllProjects` and must not
     // appear in the index either.
     if (await isTrashed(root, entry.name)) continue
-    const project = await readJson<SerializedProject>(root, projectJsonPath(entry.name))
+    let project: SerializedProject | null = null
+    try {
+      project = await readJson<SerializedProject>(root, projectJsonPath(entry.name))
+    } catch (error) {
+      if (!(error instanceof WorkspaceFileCorruptError)) throw error
+      logger.warn(`rebuildIndex: skipping corrupt project.json for ${entry.name}`, error)
+      continue
+    }
     if (!project) continue
     indexEntries.push({
       id: project.id,
@@ -107,14 +121,28 @@ async function refreshIndex(root: FileSystemDirectoryHandle): Promise<void> {
 export async function getAllProjects(): Promise<Project[]> {
   const root = requireWorkspaceRoot()
   try {
-    const index = await readWorkspaceIndex(root)
+    let index = await readWorkspaceIndex(root)
+    // If the index is empty (missing or was corrupt), trigger a rebuild so
+    // healthy projects are not hidden. This is a no-op for genuinely empty
+    // workspaces (directory scan of an absent/empty projects/ dir returns []).
+    if (index.projects.length === 0) {
+      await refreshIndex(root)
+      index = await readWorkspaceIndex(root)
+    }
     const projects: Project[] = []
     for (const entry of index.projects) {
       // Defensive: the index should never contain trashed projects, but
       // if it drifted (e.g. marker written by another tab after index
       // was last rebuilt), skip them so they don't surface in the UI.
       if (await isTrashed(root, entry.id)) continue
-      const serialized = await readJson<SerializedProject>(root, projectJsonPath(entry.id))
+      let serialized: SerializedProject | null = null
+      try {
+        serialized = await readJson<SerializedProject>(root, projectJsonPath(entry.id))
+      } catch (error) {
+        if (!(error instanceof WorkspaceFileCorruptError)) throw error
+        logger.warn(`getAllProjects: skipping corrupt project.json for ${entry.id}`, error)
+        continue
+      }
       if (!serialized) continue
       projects.push(await restoreRootFolderHandle(serialized))
     }

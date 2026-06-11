@@ -20,6 +20,18 @@ import { withKeyLock } from './with-key-lock'
 
 const logger = createLogger('WorkspaceFS')
 
+/** A file exists but its content is not valid JSON. */
+export class WorkspaceFileCorruptError extends Error {
+  constructor(
+    public readonly path: string,
+    cause: unknown,
+  ) {
+    super(`Corrupt JSON at ${path}`)
+    this.name = 'WorkspaceFileCorruptError'
+    this.cause = cause
+  }
+}
+
 function isNotFound(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'NotFoundError'
 }
@@ -84,7 +96,11 @@ export async function readJson<T>(
       const blob = await file.getFile()
       const text = await blob.text()
       if (text.length === 0) return null
-      return JSON.parse(text) as T
+      try {
+        return JSON.parse(text) as T
+      } catch (error) {
+        throw new WorkspaceFileCorruptError(segments.join('/'), error)
+      }
     } catch (error) {
       if (isNotFound(error)) return null
       throw error
