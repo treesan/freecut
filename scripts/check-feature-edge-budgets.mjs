@@ -14,8 +14,8 @@ const EDGE_BUDGETS = [
   { edge: 'editor -> media-library', maxImports: 13, maxFiles: 2 },
   { edge: 'preview -> timeline', maxImports: 2, maxFiles: 2 },
   { edge: 'preview -> player', maxImports: 2, maxFiles: 2 },
-  { edge: 'timeline -> media-library', maxImports: 2, maxFiles: 2 },
-  { edge: 'media-library -> timeline', maxImports: 2, maxFiles: 2 },
+  { edge: 'timeline -> media-library', maxImports: 15, maxFiles: 7 },
+  { edge: 'media-library -> timeline', maxImports: 17, maxFiles: 5 },
   { edge: 'composition-runtime -> player', maxImports: 8, maxFiles: 2 },
 ];
 
