@@ -739,21 +739,25 @@ fn colorWheelsFragment(input: VertexOutput) -> @location(0) vec4f {
       step: 0.01,
       animatable: true,
     },
+    // Lift/gamma/gain/offset ranges mirror Resolve's primaries reach: lift
+    // and offset span ±2.0 in normalized signal (Resolve shows offset as
+    // 25 + 100x, i.e. -175..225), gamma is 0-centered in Resolve's display
+    // (param = display + 1), gain is a plain multiplier up to 16 (+4 stops).
     lift: {
       type: 'number',
       label: 'Lift',
       default: 0,
-      min: -0.25,
-      max: 0.25,
-      step: 0.005,
+      min: -2,
+      max: 2,
+      step: 0.01,
       animatable: true,
     },
     gamma: {
       type: 'number',
       label: 'Gamma',
       default: 1,
-      min: 0.2,
-      max: 3,
+      min: 0,
+      max: 4,
       step: 0.01,
       animatable: true,
     },
@@ -762,7 +766,7 @@ fn colorWheelsFragment(input: VertexOutput) -> @location(0) vec4f {
       label: 'Gain',
       default: 1,
       min: 0,
-      max: 3,
+      max: 16,
       step: 0.01,
       animatable: true,
     },
@@ -770,9 +774,9 @@ fn colorWheelsFragment(input: VertexOutput) -> @location(0) vec4f {
       type: 'number',
       label: 'Offset',
       default: 0,
-      min: -0.25,
-      max: 0.25,
-      step: 0.005,
+      min: -2,
+      max: 2,
+      step: 0.0025,
       animatable: true,
     },
     blackPoint: {
@@ -848,9 +852,10 @@ fn colorWheelsFragment(input: VertexOutput) -> @location(0) vec4f {
       animatable: true,
     },
   },
-  packUniforms: (p) => new Float32Array(COLOR_WHEELS_UNIFORM_PARAMS.map(([key, fallback]) =>
-    readNumberParam(p, key, fallback),
-  )),
+  packUniforms: (p) =>
+    new Float32Array(
+      COLOR_WHEELS_UNIFORM_PARAMS.map(([key, fallback]) => readNumberParam(p, key, fallback)),
+    ),
 }
 
 const COLOR_WHEELS_UNIFORM_PARAMS = [
@@ -1089,11 +1094,13 @@ fn secondaryQualifierFragment(input: VertexOutput) -> @location(0) vec4f {
     },
   },
   packUniforms: (p) =>
-    new Float32Array(SECONDARY_QUALIFIER_UNIFORM_PARAMS.map(([key, fallback]) => {
-      const value = p[key]
-      if (typeof value === 'boolean') return value ? 1 : 0
-      return typeof value === 'number' ? value : fallback
-    })),
+    new Float32Array(
+      SECONDARY_QUALIFIER_UNIFORM_PARAMS.map(([key, fallback]) => {
+        const value = p[key]
+        if (typeof value === 'boolean') return value ? 1 : 0
+        return typeof value === 'number' ? value : fallback
+      }),
+    ),
 }
 
 const SECONDARY_QUALIFIER_UNIFORM_PARAMS = [

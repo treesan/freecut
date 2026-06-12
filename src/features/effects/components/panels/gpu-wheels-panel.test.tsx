@@ -78,20 +78,103 @@ describe('GpuWheelsPanel', () => {
     const props = makeProps({ lift: 0 })
     render(<GpuWheelsPanel {...props} layout="dock" />)
 
-    // lift: step 0.005, one step per dragged pixel
+    // lift display step 0.01, one step per dragged pixel
     const input = screen.getByLabelText('Lift')
     fireEvent.pointerDown(input, { button: 0, clientX: 100, pointerId: 1 })
     fireEvent.pointerMove(input, { clientX: 110, pointerId: 1 })
     fireEvent.pointerMove(input, { clientX: 120, pointerId: 1 })
 
-    expect(props.onParamLiveChange).toHaveBeenCalledWith('fx-wheels', 'lift', 0.05)
     expect(props.onParamLiveChange).toHaveBeenCalledWith('fx-wheels', 'lift', 0.1)
+    expect(props.onParamLiveChange).toHaveBeenCalledWith('fx-wheels', 'lift', 0.2)
     expect(props.onParamChange).not.toHaveBeenCalled()
 
     fireEvent.pointerUp(input, { clientX: 120, pointerId: 1 })
 
     expect(props.onParamChange).toHaveBeenCalledTimes(1)
-    expect(props.onParamChange).toHaveBeenCalledWith('fx-wheels', 'lift', 0.1)
+    expect(props.onParamChange).toHaveBeenCalledWith('fx-wheels', 'lift', 0.2)
+  })
+
+  it('shows master-inclusive RGB chips and decomposes edits into master + hue/amount', () => {
+    const props = makeProps({ shadowsHue: 0, shadowsAmount: 0.3, lift: 0.05 })
+    render(<GpuWheelsPanel {...props} layout="dock" />)
+
+    // Pure red push of 0.3 mean-centers to (+0.2, -0.1, -0.1); chips add the
+    // lift master (0.05) so the thumb wheel moves all three together.
+    const red = screen.getByLabelText('Lift Red') as HTMLInputElement
+    expect(red.value).toBe('0.25')
+    expect((screen.getByLabelText('Lift Green') as HTMLInputElement).value).toBe('-0.05')
+    expect((screen.getByLabelText('Lift Blue') as HTMLInputElement).value).toBe('-0.05')
+
+    fireEvent.change(red, { target: { value: '0.55' } })
+    expect(props.onParamsBatchLiveChange).toHaveBeenCalledWith('fx-wheels', {
+      lift: 0.15,
+      shadowsHue: 0,
+      shadowsAmount: 0.6,
+    })
+    expect(props.onParamsBatchChange).not.toHaveBeenCalled()
+
+    fireEvent.blur(red)
+    expect(props.onParamsBatchChange).toHaveBeenCalledTimes(1)
+    expect(props.onParamsBatchChange).toHaveBeenCalledWith('fx-wheels', {
+      lift: 0.15,
+      shadowsHue: 0,
+      shadowsAmount: 0.6,
+    })
+  })
+
+  it('updates chip readouts in realtime during live drags', () => {
+    const props = makeProps({ lift: 0 })
+    render(<GpuWheelsPanel {...props} layout="dock" />)
+
+    fireEvent.change(screen.getByLabelText('Lift thumb wheel'), { target: { value: '0.05' } })
+
+    // No commit yet — readouts track the live preview value.
+    expect(props.onParamChange).not.toHaveBeenCalled()
+    expect((screen.getByLabelText('Lift') as HTMLInputElement).value).toBe('0.05')
+    expect((screen.getByLabelText('Lift Red') as HTMLInputElement).value).toBe('0.05')
+    expect((screen.getByLabelText('Lift Green') as HTMLInputElement).value).toBe('0.05')
+    expect((screen.getByLabelText('Lift Blue') as HTMLInputElement).value).toBe('0.05')
+  })
+
+  it('resets a wheel including its master level', () => {
+    const props = makeProps({ shadowsHue: 120, shadowsAmount: 0.4, lift: 0.1 })
+    render(<GpuWheelsPanel {...props} layout="dock" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Lift' }))
+
+    expect(props.onParamsBatchChange).toHaveBeenCalledWith('fx-wheels', {
+      shadowsHue: 0,
+      shadowsAmount: 0,
+      lift: 0,
+    })
+  })
+
+  it('omits the master chip on the Offset wheel like Resolve', () => {
+    render(<GpuWheelsPanel {...makeProps()} layout="dock" />)
+
+    expect(screen.queryByLabelText('Offset')).toBeNull()
+    // Offset chips read in Resolve's 25-anchored units (-175..225)
+    expect((screen.getByLabelText('Offset Red') as HTMLInputElement).value).toBe('25.00')
+    expect((screen.getByLabelText('Offset Green') as HTMLInputElement).value).toBe('25.00')
+    expect((screen.getByLabelText('Offset Blue') as HTMLInputElement).value).toBe('25.00')
+    expect(screen.getByLabelText('Offset thumb wheel')).toBeInTheDocument()
+  })
+
+  it('maps offset chip edits from Resolve units back to the normalized param', () => {
+    const props = makeProps()
+    render(<GpuWheelsPanel {...props} layout="dock" />)
+
+    const red = screen.getByLabelText('Offset Red')
+    fireEvent.change(red, { target: { value: '55' } })
+    fireEvent.blur(red)
+
+    // 55 display -> mean 35 -> master param (35-25)/100 = 0.1; the remaining
+    // (+0.2, -0.1, -0.1) deviation is a red push of amount 0.3
+    expect(props.onParamsBatchChange).toHaveBeenCalledWith('fx-wheels', {
+      offset: 0.1,
+      offsetHue: 0,
+      offsetAmount: 0.3,
+    })
   })
 
   it('scrubs wheel level values live and commits once on release', () => {

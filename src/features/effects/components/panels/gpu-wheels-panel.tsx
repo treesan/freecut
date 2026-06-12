@@ -7,6 +7,11 @@ import { KeyframeToggle } from '@/features/effects/deps/keyframes-contract'
 import { PropertyRow, SliderInput } from '@/shared/ui/property-controls'
 import { cn } from '@/shared/ui/cn'
 import { getEffectDefinitionName, getEffectParamLabel } from '@/features/effects/utils/effect-i18n'
+import {
+  hueAmountFromWheelChannels,
+  wheelChannelsFromHueAmount,
+  type WheelChannels,
+} from '@/features/effects/utils/wheel-channels'
 import { EffectPanelHeaderRow } from './effect-panel-header-actions'
 import type { GpuKeyframePanelProps, GpuParamUpdates } from './panel-props'
 import type { GpuEffectDefinition } from '@/infrastructure/gpu-effects'
@@ -31,6 +36,19 @@ const DOCK_WHEEL_GRID_GAP_PX = 28
 // header (20) + column gaps (2x8) + value chips with accents (24) + thumb wheel (16)
 const DOCK_WHEEL_EXTRAS_PX = 76
 const PUCK_RADIUS_PX = 4
+// Outer master ring (dock): a light segment that rotates with the thumb
+// wheel, like Resolve's master ring around each primaries wheel.
+const DOCK_RING_THICKNESS = 5
+const DOCK_RING_GAP = 3
+const DOCK_RING_INSET = DOCK_RING_THICKNESS + DOCK_RING_GAP
+const DOCK_RING_SEGMENT_DEG = 70
+
+// Hue 0 sits on the +x axis to match getHueAmountFromClient's atan2 mapping.
+const WHEEL_HUE_CONIC =
+  'conic-gradient(from 90deg, #ff3b30, #ff9500, #ffcc00, #34c759, #00c7be, #007aff, #5856d6, #ff2d55, #ff3b30)'
+// Resolve-style disc: heavily dimmed hue field inside, saturated rim band.
+const DOCK_DISC_BACKGROUND = `radial-gradient(circle closest-side, rgba(19,19,22,0.94) 0%, rgba(19,19,22,0.9) 62%, rgba(19,19,22,0.72) 80%, rgba(19,19,22,0.25) 88%, transparent 94%), ${WHEEL_HUE_CONIC}`
+const SIDEBAR_DISC_BACKGROUND = `radial-gradient(circle at center, hsl(0 0% 18%) 0%, hsl(0 0% 10%) 26%, transparent 28%), ${WHEEL_HUE_CONIC}`
 
 function getHueAmountFromClient(clientX: number, clientY: number, element: HTMLButtonElement) {
   const rect = element.getBoundingClientRect()
@@ -54,6 +72,8 @@ interface WheelControlProps {
   compact?: boolean
   dock?: boolean
   dockFields?: React.ReactNode
+  /** Rotation (deg) of the outer master ring's light segment (dock only). */
+  masterRingRotation?: number
   onLiveChange: (hue: number, amount: number) => void
   onCommit: (hue: number, amount: number) => void
   onReset: () => void
@@ -74,10 +94,6 @@ const KEYBOARD_WHEEL_ACTIONS = {
 
 function getKeyboardWheelTarget(key: string, hue: number, amount: number): [number, number] | null {
   return KEYBOARD_WHEEL_ACTIONS[key as keyof typeof KEYBOARD_WHEEL_ACTIONS]?.(hue, amount) ?? null
-}
-
-function getDockWheelShadow(dock: boolean) {
-  return dock ? '0 0 0 3px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.18)' : undefined
 }
 
 function readNumberParam(
@@ -135,8 +151,8 @@ function DockWheelCrosshair({ dock }: { dock: boolean }) {
   if (!dock) return null
   return (
     <>
-      <span className="absolute left-1/2 top-[8%] h-[84%] w-px -translate-x-1/2 bg-white/18" />
-      <span className="absolute left-[8%] top-1/2 h-px w-[84%] -translate-y-1/2 bg-white/18" />
+      <span className="absolute left-1/2 top-[3%] h-[94%] w-px -translate-x-1/2 bg-white/15" />
+      <span className="absolute left-[3%] top-1/2 h-px w-[94%] -translate-y-1/2 bg-white/15" />
     </>
   )
 }
@@ -201,6 +217,7 @@ const WheelControl = memo(function WheelControl({
   compact = false,
   dock = false,
   dockFields,
+  masterRingRotation = 0,
   onLiveChange,
   onCommit,
   onReset,
@@ -294,10 +311,57 @@ const WheelControl = memo(function WheelControl({
     [commitKeyboardChange, disabled, localAmount, localHue],
   )
 
-  const displayTrackRadius = size / 2 - PUCK_RADIUS_PX - 1
+  // In the dock the disc sits inside the master ring, so the interactive
+  // wheel shrinks by the ring inset on each side.
+  const discSize = dock ? size - DOCK_RING_INSET * 2 : size
+  const displayTrackRadius = discSize / 2 - PUCK_RADIUS_PX - 1
   const puckX = Math.cos((localHue * Math.PI) / 180) * (displayTrackRadius * localAmount)
   const puckY = Math.sin((localHue * Math.PI) / 180) * (displayTrackRadius * localAmount)
   const resetLabel = t('effects.wheels.resetWheel', { name: label })
+
+  const wheelButton = (
+    <button
+      ref={wheelRef}
+      type="button"
+      disabled={disabled}
+      aria-disabled={disabled}
+      aria-label={t('effects.wheels.adjustWheel', {
+        name: label,
+        defaultValue: `Adjust ${label} wheel`,
+      })}
+      className={`relative rounded-full border border-border/70 ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-crosshair'}`}
+      style={{
+        width: `${discSize}px`,
+        height: `${discSize}px`,
+        touchAction: 'none',
+        boxShadow: dock ? 'inset 0 0 0 1px rgba(255,255,255,0.07)' : undefined,
+        backgroundImage: dock ? DOCK_DISC_BACKGROUND : SIDEBAR_DISC_BACKGROUND,
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onKeyDown={handleKeyDown}
+    >
+      <DockWheelCrosshair dock={dock} />
+      <div
+        className="absolute rounded-full border border-black/60 shadow-sm"
+        style={{
+          width: `${PUCK_RADIUS_PX * 2}px`,
+          height: `${PUCK_RADIUS_PX * 2}px`,
+          background: '#f8fafc',
+          left: '50%',
+          top: '50%',
+          transform: `translate(-50%, -50%) translate(${puckX}px, ${puckY}px)`,
+        }}
+      />
+    </button>
+  )
+
+  // Donut mask leaves only the outer ring band visible; the light segment
+  // starts at the bottom and rotates with the master value.
+  const ringMask = `radial-gradient(closest-side, transparent calc(100% - ${DOCK_RING_THICKNESS}px), #000 calc(100% - ${DOCK_RING_THICKNESS - 1}px))`
+  const ringFrom = 180 - DOCK_RING_SEGMENT_DEG / 2 + masterRingRotation
 
   return (
     <div
@@ -314,43 +378,24 @@ const WheelControl = memo(function WheelControl({
         disabled={disabled}
         onReset={onReset}
       />
-      <button
-        ref={wheelRef}
-        type="button"
-        disabled={disabled}
-        aria-disabled={disabled}
-        aria-label={t('effects.wheels.adjustWheel', {
-          name: label,
-          defaultValue: `Adjust ${label} wheel`,
-        })}
-        className={`relative rounded-full border border-border/70 ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-crosshair'}`}
-        style={{
-          width: `${size}px`,
-          height: `${size}px`,
-          touchAction: 'none',
-          boxShadow: getDockWheelShadow(dock),
-          backgroundImage:
-            'radial-gradient(circle at center, hsl(0 0% 18%) 0%, hsl(0 0% 10%) 26%, transparent 28%), conic-gradient(from 0deg, #ff3b30, #ff9500, #ffcc00, #34c759, #00c7be, #007aff, #5856d6, #ff2d55, #ff3b30)',
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        onKeyDown={handleKeyDown}
-      >
-        <DockWheelCrosshair dock={dock} />
-        <div
-          className="absolute rounded-full border border-black/60 shadow-sm"
-          style={{
-            width: `${PUCK_RADIUS_PX * 2}px`,
-            height: `${PUCK_RADIUS_PX * 2}px`,
-            background: '#f8fafc',
-            left: '50%',
-            top: '50%',
-            transform: `translate(-50%, -50%) translate(${puckX}px, ${puckY}px)`,
-          }}
-        />
-      </button>
+      {dock ? (
+        <div className="relative shrink-0" style={{ width: size, height: size }}>
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: `conic-gradient(from ${ringFrom}deg, #e4e4e7 0deg ${DOCK_RING_SEGMENT_DEG}deg, #131316 ${DOCK_RING_SEGMENT_DEG}deg 360deg)`,
+              WebkitMask: ringMask,
+              mask: ringMask,
+            }}
+          />
+          <div className="absolute" style={{ left: DOCK_RING_INSET, top: DOCK_RING_INSET }}>
+            {wheelButton}
+          </div>
+        </div>
+      ) : (
+        wheelButton
+      )}
       <SidebarWheelReadout dock={dock} label={label} hue={localHue} amount={localAmount} />
       {dock && dockFields}
       <SidebarResetButton
@@ -370,32 +415,64 @@ const WHEEL_DESCRIPTORS = [
   { labelKey: 'effects.wheels.highlights', hueKey: 'highlightsHue', amountKey: 'highlightsAmount' },
 ] as const
 
+/**
+ * Affine mapping between the stored shader param and the Resolve-style
+ * display units shown in the wheel fields: display = param * scale + bias.
+ * Lift/gain read in native units, gamma reads 0-centered (param - 1), and
+ * offset reads as Resolve's 25-anchored scale (-175..225 for param ±2).
+ */
+interface WheelDisplay {
+  scale: number
+  bias: number
+  step: number
+}
+
+function toWheelDisplay(display: WheelDisplay, value: number): number {
+  return value * display.scale + display.bias
+}
+
+function fromWheelDisplay(display: WheelDisplay, value: number): number {
+  return (value - display.bias) / display.scale
+}
+
 const DOCK_WHEEL_DESCRIPTORS = [
   {
     labelKey: 'effects.params.lift',
     hueKey: 'shadowsHue',
     amountKey: 'shadowsAmount',
     levelKey: 'lift',
+    masterChip: true,
+    display: { scale: 1, bias: 0, step: 0.01 },
   },
   {
     labelKey: 'effects.params.gamma',
     hueKey: 'midtonesHue',
     amountKey: 'midtonesAmount',
     levelKey: 'gamma',
+    masterChip: true,
+    display: { scale: 1, bias: -1, step: 0.01 },
   },
   {
     labelKey: 'effects.params.gain',
     hueKey: 'highlightsHue',
     amountKey: 'highlightsAmount',
     levelKey: 'gain',
+    masterChip: true,
+    display: { scale: 1, bias: 0, step: 0.01 },
   },
+  // Resolve's Offset wheel shows only R/G/B chips — the master scalar is
+  // still driven by the thumb wheel below.
   {
     labelKey: 'effects.params.offset',
     hueKey: 'offsetHue',
     amountKey: 'offsetAmount',
     levelKey: 'offset',
+    masterChip: false,
+    display: { scale: 100, bias: 25, step: 0.25 },
   },
 ] as const
+
+type DockWheelDescriptor = (typeof DOCK_WHEEL_DESCRIPTORS)[number]
 
 const DOCK_TOP_PARAMS = ['temperature', 'tint', 'contrast', 'pivot', 'midDetail'] as const
 const DOCK_BOTTOM_PARAMS = [
@@ -443,19 +520,10 @@ function getDockParamAccent(key: string): string {
   return 'from-zinc-300 via-red-500 to-blue-500'
 }
 
-function getDockFieldAccent(key: string): string {
-  if (key.endsWith('Hue')) return 'bg-emerald-500'
-  if (key.endsWith('Amount')) return 'bg-red-500'
-  if (key === 'lift' || key === 'gamma' || key === 'gain' || key === 'offset') {
-    return 'bg-zinc-200'
-  }
-  return 'bg-blue-500'
-}
-
-function formatWheelChipValue(key: string, value: number, step: unknown): string {
-  if (key.endsWith('Hue')) return Math.round(value).toString()
-  return formatParamValue(value, step)
-}
+// Resolve-style chip order under each wheel: white (master) then R, G, B.
+const WHEEL_CHANNEL_INDICES = [0, 1, 2] as const
+const WHEEL_CHANNEL_LABELS = ['Red', 'Green', 'Blue'] as const
+const WHEEL_CHANNEL_ACCENTS = ['bg-red-500', 'bg-green-500', 'bg-blue-500'] as const
 
 const THUMB_WHEEL_CLASS =
   'mt-1 h-3 w-full cursor-ew-resize appearance-none rounded-full border border-black/80 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.22)_0_1px,rgba(0,0,0,0.65)_1px_5px)] shadow-inner disabled:cursor-not-allowed disabled:opacity-60 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-black/80 [&::-moz-range-thumb]:bg-zinc-200 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-black/80 [&::-webkit-slider-thumb]:bg-zinc-200'
@@ -714,6 +782,31 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
   const paramEntries = Object.entries(definition.params)
   const isDefault = paramEntries.every(([key, param]) => gpuEffect.params[key] === param.default)
 
+  // Live param overlay: drags emit preview-only changes that don't touch the
+  // committed effect until release. Readouts (wheels, chips, fields) render
+  // from committed params merged with the in-flight values, so every control
+  // tracks the gesture in realtime instead of jumping on commit.
+  const [liveOverlay, setLiveOverlay] = useState<GpuParamUpdates | null>(null)
+  useEffect(() => setLiveOverlay(null), [effect.id])
+  const displayParams = liveOverlay ? { ...gpuEffect.params, ...liveOverlay } : gpuEffect.params
+
+  const emitLiveParam = (key: string, value: number | boolean | string) => {
+    setLiveOverlay((current) => ({ ...current, [key]: value }))
+    onParamLiveChange(effect.id, key, value)
+  }
+  const emitCommitParam = (key: string, value: number | boolean | string) => {
+    setLiveOverlay(null)
+    onParamChange(effect.id, key, value)
+  }
+  const emitLiveBatch = (updates: GpuParamUpdates) => {
+    setLiveOverlay((current) => ({ ...current, ...updates }))
+    onParamsBatchLiveChange(effect.id, updates)
+  }
+  const emitCommitBatch = (updates: GpuParamUpdates) => {
+    setLiveOverlay(null)
+    onParamsBatchChange(effect.id, updates)
+  }
+
   useEffect(() => {
     const el = wheelGridRef.current
     if (!el) return
@@ -747,21 +840,34 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
     return () => observer.disconnect()
   }, [isDock])
 
+  // Ring indicator: two full turns across the master's range, anchored at
+  // its default, like Resolve's endless master ring rotating under the wheel.
+  const getMasterRingRotation = (levelKey: string) => {
+    const levelParam = definition.params[levelKey]
+    if (!levelParam || levelParam.type !== 'number') return 0
+    const level = readNumberParam(definition, displayParams, levelKey)
+    const defaultValue = typeof levelParam.default === 'number' ? levelParam.default : 0
+    const min = typeof levelParam.min === 'number' ? levelParam.min : 0
+    const max = typeof levelParam.max === 'number' ? levelParam.max : 1
+    const range = max - min
+    return range > 0 ? ((level - defaultValue) / range) * 720 : 0
+  }
+
   const updateNumberParam = (key: string, rawValue: string, mode: 'live' | 'commit') => {
     const param = definition.params[key]
     if (!param || param.type !== 'number') return null
     const next = Number(rawValue)
     if (!Number.isFinite(next)) return null
     const clamped = clampParamValue(param, next)
-    if (mode === 'live') onParamLiveChange(effect.id, key, clamped)
-    else onParamChange(effect.id, key, clamped)
+    if (mode === 'live') emitLiveParam(key, clamped)
+    else emitCommitParam(key, clamped)
     return clamped
   }
 
   const renderDockNumberControl = (key: string) => {
     const param = definition.params[key]
     if (!param || param.type !== 'number') return null
-    const value = (gpuEffect.params[key] as number) ?? param.default
+    const value = (displayParams[key] as number) ?? param.default
     const label = getEffectParamLabel(t, definition, key)
 
     return (
@@ -797,48 +903,96 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
     )
   }
 
-  const renderDockWheelFields = (
-    levelKey: string,
-    hueKey: string,
-    amountKey: string,
-    wheelLabel: string,
-  ) => {
+  const renderDockWheelFields = (desc: DockWheelDescriptor, wheelLabel: string) => {
+    const { levelKey, hueKey, amountKey, masterChip, display } = desc
     const levelParam = definition.params[levelKey]
-    const hueParam = definition.params[hueKey]
     const amountParam = definition.params[amountKey]
-    const levelValue = readNumberParam(definition, gpuEffect.params, levelKey)
-    const hue = readNumberParam(definition, gpuEffect.params, hueKey)
-    const amount = readNumberParam(definition, gpuEffect.params, amountKey)
-    const fields = [
-      { key: levelKey, param: levelParam, value: levelValue },
-      { key: amountKey, param: amountParam, value: amount },
-      { key: hueKey, param: hueParam, value: hue },
-    ]
+    const levelValue = readNumberParam(definition, displayParams, levelKey)
+    const hue = readNumberParam(definition, displayParams, hueKey)
+    const amount = readNumberParam(definition, displayParams, amountKey)
+    const deviations = wheelChannelsFromHueAmount(hue, amount)
+    // Resolve-style readout: channel chips include the master, so rolling the
+    // thumb wheel moves all three together (Gain at 1.07 reads 1.07 1.07 1.07).
+    const levelDisplay = toWheelDisplay(display, levelValue)
+    const channels = deviations.map(
+      (deviation) => levelDisplay + deviation * display.scale,
+    ) as WheelChannels
+    const displayMin = toWheelDisplay(display, levelParam?.min ?? 0)
+    const displayMax = toWheelDisplay(display, levelParam?.max ?? 0)
+    const chipMin = displayMin - display.scale
+    const chipMax = displayMax + display.scale
+    const chipClass =
+      'h-5 w-full rounded-[2px] border border-black/80 bg-black/75 px-1 text-center font-mono text-[10px] leading-5 tabular-nums text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+
+    const updateLevelFromDisplay = (rawValue: string, mode: 'live' | 'commit') => {
+      const next = Number(rawValue)
+      if (!Number.isFinite(next)) return
+      const clamped = clampParamValue(levelParam, fromWheelDisplay(display, next))
+      if (mode === 'live') emitLiveParam(levelKey, clamped)
+      else emitCommitParam(levelKey, clamped)
+    }
+
+    // Editing an R/G/B chip decomposes the channel triple back into the
+    // master (the mean) plus a wheel push (hue + amount), so chips read back
+    // exactly what was typed.
+    const updateChannel = (index: 0 | 1 | 2, rawValue: string, mode: 'live' | 'commit') => {
+      const next = Number(rawValue)
+      if (!Number.isFinite(next)) return
+      const edited: WheelChannels = [channels[0], channels[1], channels[2]]
+      edited[index] = clamp(next, chipMin, chipMax)
+      const mean = (edited[0] + edited[1] + edited[2]) / 3
+      const wheel = hueAmountFromWheelChannels([
+        (edited[0] - mean) / display.scale,
+        (edited[1] - mean) / display.scale,
+        (edited[2] - mean) / display.scale,
+      ])
+      const meanParam = fromWheelDisplay(display, mean)
+      const updates = {
+        [levelKey]: clampParamValue(levelParam, Math.round(meanParam * 10000) / 10000),
+        [hueKey]: Math.round(wheel.hue * 10) / 10,
+        [amountKey]: clampParamValue(amountParam, Math.round(wheel.amount * 1000) / 1000),
+      }
+      if (mode === 'live') emitLiveBatch(updates)
+      else emitCommitBatch(updates)
+    }
 
     return (
-      <div className="w-full max-w-[11rem] px-1">
-        <div className="grid grid-cols-3 gap-1">
-          {fields.map(({ key, param, value }) => (
-            <span key={key} className="flex min-w-0 flex-col items-center">
+      <div className="w-full max-w-[13rem] px-1">
+        <div className={cn('grid gap-1', masterChip ? 'grid-cols-4' : 'grid-cols-3')}>
+          {masterChip && (
+            <span className="flex min-w-0 flex-col items-center">
               <DockNumberInput
-                ariaLabel={
-                  key === levelKey
-                    ? wheelLabel
-                    : `${wheelLabel} ${getEffectParamLabel(t, definition, key)}`
-                }
-                name={`dock-${key}`}
-                value={formatWheelChipValue(key, value, param?.step)}
-                min={param?.min}
-                max={param?.max}
-                step={param?.step}
+                ariaLabel={wheelLabel}
+                name={`dock-${levelKey}`}
+                value={formatParamValue(levelDisplay, display.step)}
+                min={displayMin}
+                max={displayMax}
+                step={display.step}
                 disabled={!effect.enabled}
-                onLive={(raw) => updateNumberParam(key, raw, 'live')}
-                onCommit={(raw) => updateNumberParam(key, raw, 'commit')}
-                className="h-5 w-full rounded-[2px] border border-black/80 bg-black/75 px-1 text-center font-mono text-[10px] leading-5 tabular-nums text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onLive={(raw) => updateLevelFromDisplay(raw, 'live')}
+                onCommit={(raw) => updateLevelFromDisplay(raw, 'commit')}
+                className={chipClass}
+              />
+              <span aria-hidden="true" className="mt-0.5 h-0.5 w-7 rounded-full bg-zinc-200" />
+            </span>
+          )}
+          {WHEEL_CHANNEL_INDICES.map((index) => (
+            <span key={WHEEL_CHANNEL_LABELS[index]} className="flex min-w-0 flex-col items-center">
+              <DockNumberInput
+                ariaLabel={`${wheelLabel} ${WHEEL_CHANNEL_LABELS[index]}`}
+                name={`dock-${levelKey}-${WHEEL_CHANNEL_LABELS[index].toLowerCase()}`}
+                value={formatParamValue(channels[index], display.step)}
+                min={chipMin}
+                max={chipMax}
+                step={display.step}
+                disabled={!effect.enabled}
+                onLive={(raw) => updateChannel(index, raw, 'live')}
+                onCommit={(raw) => updateChannel(index, raw, 'commit')}
+                className={chipClass}
               />
               <span
                 aria-hidden="true"
-                className={cn('mt-0.5 h-0.5 w-7 rounded-full', getDockFieldAccent(key))}
+                className={cn('mt-0.5 h-0.5 w-7 rounded-full', WHEEL_CHANNEL_ACCENTS[index])}
               />
             </span>
           ))}
@@ -846,13 +1000,13 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
         <DockThumbWheel
           ariaLabel={`${wheelLabel} thumb wheel`}
           name={`dock-${levelKey}-thumb`}
-          value={levelValue}
-          min={levelParam?.min}
-          max={levelParam?.max}
-          step={levelParam?.step}
+          value={levelDisplay}
+          min={displayMin}
+          max={displayMax}
+          step={display.step}
           disabled={!effect.enabled}
-          onLive={(raw) => updateNumberParam(levelKey, raw, 'live')}
-          onCommit={(raw) => updateNumberParam(levelKey, raw, 'commit')}
+          onLive={(raw) => updateLevelFromDisplay(raw, 'live')}
+          onCommit={(raw) => updateLevelFromDisplay(raw, 'commit')}
         />
       </div>
     )
@@ -864,7 +1018,7 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
     keys.map((key) => {
       const param = definition.params[key]
       if (!param) return null
-      const value = (gpuEffect.params[key] as number) ?? param.default
+      const value = (displayParams[key] as number) ?? param.default
       const keyframeProperty = getKeyframeProperty(effect.id, key)
       return (
         <PropertyRow
@@ -875,8 +1029,8 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
           <div className="flex items-center gap-1 min-w-0 w-full">
             <SliderInput
               value={value}
-              onChange={(v) => onParamChange(effect.id, key, v)}
-              onLiveChange={(v) => onParamLiveChange(effect.id, key, v)}
+              onChange={(v) => emitCommitParam(key, v)}
+              onLiveChange={(v) => emitLiveParam(key, v)}
               min={param.min ?? -100}
               max={param.max ?? 100}
               step={param.step ?? 1}
@@ -927,33 +1081,31 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
                 <WheelControl
                   key={desc.labelKey}
                   label={t(desc.labelKey)}
-                  hue={(gpuEffect.params[desc.hueKey] as number) ?? 0}
-                  amount={(gpuEffect.params[desc.amountKey] as number) ?? 0}
+                  hue={(displayParams[desc.hueKey] as number) ?? 0}
+                  amount={(displayParams[desc.amountKey] as number) ?? 0}
                   size={wheelSize}
                   disabled={!effect.enabled}
                   dock
-                  dockFields={renderDockWheelFields(
-                    desc.levelKey,
-                    desc.hueKey,
-                    desc.amountKey,
-                    t(desc.labelKey),
-                  )}
+                  masterRingRotation={getMasterRingRotation(desc.levelKey)}
+                  dockFields={renderDockWheelFields(desc, t(desc.labelKey))}
                   onLiveChange={(hue, amount) => {
-                    onParamsBatchLiveChange(effect.id, {
+                    emitLiveBatch({
                       [desc.hueKey]: hue,
                       [desc.amountKey]: amount,
                     })
                   }}
                   onCommit={(hue, amount) => {
-                    onParamsBatchChange(effect.id, {
+                    emitCommitBatch({
                       [desc.hueKey]: hue,
                       [desc.amountKey]: amount,
                     })
                   }}
                   onReset={() => {
-                    onParamsBatchChange(effect.id, {
+                    // Reset the whole wheel: color push and its master level.
+                    emitCommitBatch({
                       [desc.hueKey]: 0,
                       [desc.amountKey]: 0,
+                      [desc.levelKey]: (definition.params[desc.levelKey]?.default as number) ?? 0,
                     })
                   }}
                 />
@@ -974,24 +1126,24 @@ export const GpuWheelsPanel = memo(function GpuWheelsPanel({
               <WheelControl
                 key={desc.labelKey}
                 label={t(desc.labelKey)}
-                hue={(gpuEffect.params[desc.hueKey] as number) ?? 0}
-                amount={(gpuEffect.params[desc.amountKey] as number) ?? 0}
+                hue={(displayParams[desc.hueKey] as number) ?? 0}
+                amount={(displayParams[desc.amountKey] as number) ?? 0}
                 size={wheelSize}
                 disabled={!effect.enabled}
                 onLiveChange={(hue, amount) => {
-                  onParamsBatchLiveChange(effect.id, {
+                  emitLiveBatch({
                     [desc.hueKey]: hue,
                     [desc.amountKey]: amount,
                   })
                 }}
                 onCommit={(hue, amount) => {
-                  onParamsBatchChange(effect.id, {
+                  emitCommitBatch({
                     [desc.hueKey]: hue,
                     [desc.amountKey]: amount,
                   })
                 }}
                 onReset={() => {
-                  onParamsBatchChange(effect.id, {
+                  emitCommitBatch({
                     [desc.hueKey]: 0,
                     [desc.amountKey]: 0,
                   })
