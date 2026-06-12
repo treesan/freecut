@@ -461,6 +461,8 @@
           "toggleSnap": "Toggle snap",
           "toggleCanvasSnap": "Toggle canvas (gizmo) snap",
           "toggleKeyframeEditorPanel": "Toggle keyframe editor panel",
+          "editWorkspace": "Switch to Edit workspace",
+          "colorWorkspace": "Switch to Color workspace",
           "copy": "Copy selected items or keyframes",
           "cut": "Cut selected items or keyframes",
           "paste": "Paste items or keyframes",

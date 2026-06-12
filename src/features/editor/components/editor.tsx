@@ -3,6 +3,7 @@ import { useNavigate, useRouter } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { createLogger } from '@/shared/logging/logger'
 import { i18n } from '@/i18n'
+import type { ImperativePanelHandle } from 'react-resizable-panels'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import { ErrorBoundary } from '@/app/error-boundary'
 import { Toolbar } from './toolbar'
@@ -47,6 +48,7 @@ import {
   useRenderQueueStore,
 } from '@/features/editor/deps/export-contract'
 import { getEditorLayout, getEditorLayoutCssVars } from '@/config/editor-layout'
+import { EDITOR_WORKSPACE_TIMELINE_SIZE, type EditorWorkspaceId } from '@/config/editor-workspaces'
 import {
   createProjectUpgradeBackup,
   formatProjectUpgradeBackupName,
@@ -64,6 +66,29 @@ import {
 } from '@/features/editor/deps/media-library'
 const logger = createLogger('Editor')
 const EDITOR_PROJECT_ROUTE_ID = '/editor/$projectId'
+
+function workspaceTimelineSizeStorageKey(workspace: EditorWorkspaceId): string {
+  return `editor:workspaceTimelineSize:${workspace}`
+}
+
+function loadWorkspaceTimelineSize(workspace: EditorWorkspaceId): number | null {
+  try {
+    const raw = localStorage.getItem(workspaceTimelineSizeStorageKey(workspace))
+    if (raw === null) return null
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function saveWorkspaceTimelineSize(workspace: EditorWorkspaceId, size: number): void {
+  try {
+    localStorage.setItem(workspaceTimelineSizeStorageKey(workspace), String(size))
+  } catch {
+    /* noop */
+  }
+}
 const LazyExportDialog = lazy(() =>
   importExportDialog().then((module) => ({
     default: module.ExportDialog,
@@ -309,8 +334,11 @@ export const LoadedEditor = memo(function LoadedEditor({
   const syncSidebarLayout = useEditorStore((s) => s.syncSidebarLayout)
   const propertiesFullColumn = useEditorStore((s) => s.propertiesFullColumn)
   const mediaFullColumn = useEditorStore((s) => s.mediaFullColumn)
+  const workspace = useEditorStore((s) => s.workspace)
   const isMaskEditingActive = useMaskEditorStore((s) => s.isEditing)
   const hasRefreshedMigrationStateRef = useRef(false)
+  const timelinePanelRef = useRef<ImperativePanelHandle>(null)
+  const previousWorkspaceRef = useRef(workspace)
 
   // Guard against concurrent saves (e.g., spamming Ctrl+S)
   const isSavingRef = useRef(false)
@@ -445,6 +473,28 @@ export const LoadedEditor = memo(function LoadedEditor({
   useEffect(() => {
     syncSidebarLayout(editorLayout)
   }, [editorLayout, syncSidebarLayout])
+
+  // Apply the per-workspace timeline split when switching workspaces:
+  // snapshot the outgoing workspace's split, then restore the incoming
+  // workspace's saved split (or its preset default on first visit).
+  useEffect(() => {
+    const previousWorkspace = previousWorkspaceRef.current
+    if (previousWorkspace === workspace) return
+    previousWorkspaceRef.current = workspace
+
+    const timelinePanel = timelinePanelRef.current
+    if (!timelinePanel) return
+
+    saveWorkspaceTimelineSize(previousWorkspace, timelinePanel.getSize())
+
+    const targetSize =
+      loadWorkspaceTimelineSize(workspace) ??
+      EDITOR_WORKSPACE_TIMELINE_SIZE[workspace] ??
+      editorLayout.timelineDefaultSize
+    timelinePanel.resize(
+      Math.min(editorLayout.timelineMaxSize, Math.max(editorLayout.timelineMinSize, targetSize)),
+    )
+  }, [workspace, editorLayout])
 
   useEffect(() => {
     const timelineState = useTimelineStore.getState()
@@ -625,6 +675,7 @@ export const LoadedEditor = memo(function LoadedEditor({
 
           {/* Bottom - Timeline */}
           <ResizablePanel
+            ref={timelinePanelRef}
             defaultSize={editorLayout.timelineDefaultSize}
             minSize={editorLayout.timelineMinSize}
             maxSize={editorLayout.timelineMaxSize}

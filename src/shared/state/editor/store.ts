@@ -5,8 +5,40 @@ import {
   getLeftEditorSidebarBounds,
   getRightEditorSidebarBounds,
 } from '@/config/editor-layout'
+import {
+  normalizeEditorWorkspaceId,
+  normalizeEditorWorkspaceLayout,
+  type EditorWorkspaceId,
+  type EditorWorkspaceLayout,
+} from '@/config/editor-workspaces'
 
 const LEGACY_SIDEBAR_DEFAULT_WIDTH = 320
+const WORKSPACE_STORAGE_KEY = 'editor:workspace'
+
+function workspaceLayoutStorageKey(workspace: EditorWorkspaceId): string {
+  return `editor:workspaceLayout:${workspace}`
+}
+
+function loadEditorWorkspaceId(): EditorWorkspaceId {
+  try {
+    return normalizeEditorWorkspaceId(localStorage.getItem(WORKSPACE_STORAGE_KEY))
+  } catch {
+    return normalizeEditorWorkspaceId(null)
+  }
+}
+
+/** Saved per-workspace layout (user tweaks), falling back to the workspace preset. */
+function loadEditorWorkspaceLayout(workspace: EditorWorkspaceId): EditorWorkspaceLayout {
+  try {
+    const raw = localStorage.getItem(workspaceLayoutStorageKey(workspace))
+    return normalizeEditorWorkspaceLayout(raw === null ? null : JSON.parse(raw), workspace)
+  } catch {
+    return normalizeEditorWorkspaceLayout(null, workspace)
+  }
+}
+
+const initialWorkspace = loadEditorWorkspaceId()
+const initialWorkspaceLayout = loadEditorWorkspaceLayout(initialWorkspace)
 
 function normalizeSidebarWidth(
   width: number,
@@ -41,8 +73,9 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   rightSidebarOpen: true,
   keyframeEditorOpen: false,
   keyframeEditorShortcutScopeActive: false,
-  activeTab: 'media',
-  clipInspectorTab: 'video',
+  workspace: initialWorkspace,
+  activeTab: initialWorkspaceLayout.activeTab,
+  clipInspectorTab: initialWorkspaceLayout.clipInspectorTab,
   sidebarWidth: loadSidebarWidth('editor:sidebarWidth', EDITOR_LAYOUT.leftSidebarDefaultWidth),
   rightSidebarWidth: loadSidebarWidth(
     'editor:rightSidebarWidth',
@@ -60,7 +93,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   sourcePatchVideoTrackId: null,
   sourcePatchAudioTrackId: null,
   linkedSelectionEnabled: true,
-  colorScopesOpen: false,
+  colorScopesOpen: initialWorkspaceLayout.colorScopesOpen,
   mixerFloating: (() => {
     try {
       return localStorage.getItem('editor:mixerFloating') === 'true'
@@ -108,6 +141,30 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
           : false,
         leftSidebarOpen: nextOpen ? true : state.leftSidebarOpen,
       }
+    }),
+  setWorkspace: (workspace) =>
+    set((state) => {
+      if (state.workspace === workspace) return state
+
+      // Remember the outgoing workspace's layout so the user's tweaks
+      // survive a round trip; the incoming workspace restores its own
+      // saved layout (or the preset on first visit).
+      try {
+        const currentLayout: EditorWorkspaceLayout = {
+          colorScopesOpen: state.colorScopesOpen,
+          clipInspectorTab: state.clipInspectorTab,
+          activeTab: state.activeTab,
+        }
+        localStorage.setItem(
+          workspaceLayoutStorageKey(state.workspace),
+          JSON.stringify(currentLayout),
+        )
+        localStorage.setItem(WORKSPACE_STORAGE_KEY, workspace)
+      } catch {
+        /* noop */
+      }
+
+      return { workspace, ...loadEditorWorkspaceLayout(workspace) }
     }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setClipInspectorTab: (tab) => set({ clipInspectorTab: tab }),

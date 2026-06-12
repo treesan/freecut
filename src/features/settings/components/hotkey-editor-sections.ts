@@ -164,6 +164,14 @@ export const HOTKEY_EDITOR_SECTIONS: readonly HotkeyEditorSection[] = [
         labelKey: 'projects.settings.hotkeys.items.toggleKeyframeEditorPanel',
         keys: ['TOGGLE_KEYFRAME_EDITOR'],
       },
+      {
+        labelKey: 'projects.settings.hotkeys.items.editWorkspace',
+        keys: ['WORKSPACE_EDIT'],
+      },
+      {
+        labelKey: 'projects.settings.hotkeys.items.colorWorkspace',
+        keys: ['WORKSPACE_COLOR'],
+      },
     ],
   },
   {

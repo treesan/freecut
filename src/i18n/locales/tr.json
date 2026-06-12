@@ -36,6 +36,11 @@
   },
   "toolbar": {
     "ariaLabel": "Editör araç çubuğu",
+    "workspaces": {
+      "label": "Çalışma alanları",
+      "edit": "Kurgu",
+      "color": "Renk"
+    },
     "backToProjects": "Projelere Dön",
     "backToProjectsAria": "Projelere dön",
     "specs": "{{width}}x{{height}} | {{fps}}fps",

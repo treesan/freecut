@@ -461,6 +461,8 @@
           "toggleSnap": "Einrasten umschalten",
           "toggleCanvasSnap": "Leinwand-Einrasten (Gizmo) umschalten",
           "toggleKeyframeEditorPanel": "Keyframe-Editor-Panel umschalten",
+          "editWorkspace": "Zum Schnitt-Arbeitsbereich wechseln",
+          "colorWorkspace": "Zum Farb-Arbeitsbereich wechseln",
           "copy": "Ausgewählte Elemente oder Keyframes kopieren",
           "cut": "Ausgewählte Elemente oder Keyframes ausschneiden",
           "paste": "Elemente oder Keyframes einfügen",

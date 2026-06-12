@@ -461,6 +461,8 @@
           "toggleSnap": "切换吸附",
           "toggleCanvasSnap": "切换画布（操控器）吸附",
           "toggleKeyframeEditorPanel": "切换关键帧编辑器面板",
+          "editWorkspace": "切换到剪辑工作区",
+          "colorWorkspace": "切换到调色工作区",
           "copy": "复制所选项目或关键帧",
           "cut": "剪切所选项目或关键帧",
           "paste": "粘贴项目或关键帧",

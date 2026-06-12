@@ -69,6 +69,8 @@ export const HOTKEYS = {
   TOGGLE_SNAP: 's',
   TOGGLE_CANVAS_SNAP: 'shift+s',
   OPEN_SCENE_BROWSER: 'mod+shift+f',
+  WORKSPACE_EDIT: 'alt+1',
+  WORKSPACE_COLOR: 'alt+2',
 
   // Markers
   ADD_MARKER: 'm',
@@ -331,6 +333,8 @@ export const HOTKEY_DESCRIPTIONS: Record<HotkeyKey, string> = {
   TOGGLE_SNAP: 'Toggle snap',
   TOGGLE_CANVAS_SNAP: 'Toggle canvas (gizmo) snap',
   OPEN_SCENE_BROWSER: 'Open Scene Browser (search AI captions)',
+  WORKSPACE_EDIT: 'Switch to Edit workspace',
+  WORKSPACE_COLOR: 'Switch to Color workspace',
 
   // Markers
   ADD_MARKER: 'Add marker at playhead',

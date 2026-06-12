@@ -36,6 +36,11 @@
   },
   "toolbar": {
     "ariaLabel": "Barre d'outils de l'éditeur",
+    "workspaces": {
+      "label": "Espaces de travail",
+      "edit": "Montage",
+      "color": "Étalonnage"
+    },
     "backToProjects": "Retour aux projets",
     "backToProjectsAria": "Retour aux projets",
     "specs": "{{width}}x{{height}} | {{fps}} ips",

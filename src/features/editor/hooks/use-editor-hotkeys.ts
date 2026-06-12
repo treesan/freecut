@@ -1,6 +1,7 @@
 import { useHotkeys } from 'react-hotkeys-hook'
 import { HOTKEY_OPTIONS } from '@/config/hotkeys'
 import { useResolvedHotkeys } from '@/features/editor/deps/settings'
+import { useEditorStore } from '@/shared/state/editor'
 
 import { useSceneBrowserStore } from '@/features/editor/deps/scene-browser'
 
@@ -60,6 +61,27 @@ export function useEditorHotkeys(callbacks: EditorHotkeyCallbacks = {}) {
       useSceneBrowserStore.getState().openBrowser({ focus: true })
     },
     { ...HOTKEY_OPTIONS, eventListenerOptions: { capture: true } },
+    [],
+  )
+
+  // Workspace switching: Alt+1 (Edit), Alt+2 (Color)
+  useHotkeys(
+    hotkeys.WORKSPACE_EDIT,
+    (event) => {
+      event.preventDefault()
+      useEditorStore.getState().setWorkspace('edit')
+    },
+    HOTKEY_OPTIONS,
+    [],
+  )
+
+  useHotkeys(
+    hotkeys.WORKSPACE_COLOR,
+    (event) => {
+      event.preventDefault()
+      useEditorStore.getState().setWorkspace('color')
+    },
+    HOTKEY_OPTIONS,
     [],
   )
 }
