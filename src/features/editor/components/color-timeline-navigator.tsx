@@ -32,10 +32,11 @@ interface TimelineClip {
   gradeThumbnail: ColorGradeThumbnailTreatment
 }
 
-const STRIP_HEIGHT = 164
+const FILM_TILE_SCROLLBAR_GUTTER = 16
+const STRIP_HEIGHT = 164 + FILM_TILE_SCROLLBAR_GUTTER
 const FILM_TILE_WIDTH = 118
 const FILM_TILE_HEIGHT = 80
-const FILM_TILE_STRIP_HEIGHT = 88
+const FILM_TILE_STRIP_HEIGHT = 88 + FILM_TILE_SCROLLBAR_GUTTER
 const MINI_TIMELINE_TRACK_AREA_HEIGHT = 52
 const MINI_TIMELINE_LABEL_WIDTH = 32
 const COLOR_IO_LANE_HEIGHT = 14
@@ -642,8 +643,9 @@ export const ColorTimelineNavigator = memo(function ColorTimelineNavigator() {
     >
       <div className="flex h-full flex-col">
         <div
-          className="flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-black/40 px-1 py-1"
-          style={{ height: FILM_TILE_STRIP_HEIGHT }}
+          className="flex shrink-0 gap-1 overflow-x-auto overflow-y-hidden border-b border-black/40 px-1 pt-1"
+          data-testid="color-timeline-filmstrip-scroll"
+          style={{ height: FILM_TILE_STRIP_HEIGHT, paddingBottom: FILM_TILE_SCROLLBAR_GUTTER }}
         >
           {visualClips.length > 0 ? (
             visualClips.map(renderFilmTile)

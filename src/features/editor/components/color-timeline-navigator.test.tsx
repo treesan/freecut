@@ -100,6 +100,16 @@ describe('ColorTimelineNavigator', () => {
     expect(screen.getAllByTitle('shot-01.mp4').length).toBeGreaterThan(0)
   })
 
+  it('reserves space for the filmstrip scrollbar below the tiles', () => {
+    render(<ColorTimelineNavigator />)
+
+    const filmstripScroll = screen.getByTestId('color-timeline-filmstrip-scroll')
+    const tile = screen.getByTestId('color-timeline-film-tile')
+
+    expect(filmstripScroll).toHaveStyle({ height: '104px', paddingBottom: '16px' })
+    expect(tile).toHaveStyle({ height: '80px' })
+  })
+
   it('places mini timeline segments on their matching video track rows', () => {
     useItemsStore.getState().setTracks([VIDEO_TRACK_2, VIDEO_TRACK, AUDIO_TRACK])
     useItemsStore.getState().setItems([VIDEO_ITEM, VIDEO_ITEM_ON_V2])
