@@ -1,4 +1,10 @@
-export type ClipInspectorTab = 'video' | 'audio' | 'effects'
+import type {
+  EditorClipInspectorTab,
+  EditorSidebarTab,
+  EditorWorkspaceId,
+} from '@/config/editor-workspaces'
+
+export type ClipInspectorTab = EditorClipInspectorTab
 
 export interface EditorState {
   activePanel: 'media' | 'effects' | 'properties' | null
@@ -6,7 +12,8 @@ export interface EditorState {
   rightSidebarOpen: boolean
   keyframeEditorOpen: boolean
   keyframeEditorShortcutScopeActive: boolean
-  activeTab: 'media' | 'text' | 'shapes' | 'effects' | 'transitions' | 'ai'
+  workspace: EditorWorkspaceId
+  activeTab: EditorSidebarTab
   clipInspectorTab: ClipInspectorTab
   sidebarWidth: number
   rightSidebarWidth: number
@@ -37,7 +44,8 @@ export interface EditorActions {
   toggleLeftSidebar: () => void
   toggleRightSidebar: () => void
   toggleKeyframeEditorOpen: () => void
-  setActiveTab: (tab: 'media' | 'text' | 'shapes' | 'effects' | 'transitions' | 'ai') => void
+  setWorkspace: (workspace: EditorWorkspaceId) => void
+  setActiveTab: (tab: EditorSidebarTab) => void
   setClipInspectorTab: (tab: ClipInspectorTab) => void
   setSidebarWidth: (width: number) => void
   setRightSidebarWidth: (width: number) => void

@@ -3,15 +3,9 @@
  */
 
 export { AbsoluteFill } from '../composition'
-export { HeadlessPlayer, Player, type PlayerRef } from '..'
+export { HeadlessPlayer, type PlayerRef } from '..'
 export { PlayerEmitterProvider } from '../event-emitter'
-export {
-  ClockBridgeProvider,
-  useClock,
-  useClockIsPlaying,
-  useClockPlaybackRate,
-  useBridgedTimelineContext,
-} from '../clock'
+export { ClockBridgeProvider, useClock, useClockIsPlaying, useClockPlaybackRate } from '../clock'
 export { VideoConfigProvider } from '../video-config-context'
 export { useVideoConfig } from '../video-config'
 export { usePlayer } from '../use-player'

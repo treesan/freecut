@@ -4,7 +4,6 @@ export {
   useClock,
   useClockIsPlaying,
   useClockPlaybackRate,
-  useBridgedTimelineContext,
   VideoConfigProvider,
   useVideoConfig,
   usePlayer,

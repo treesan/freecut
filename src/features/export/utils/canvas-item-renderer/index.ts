@@ -12,13 +12,11 @@
 export type {
   CanvasSettings,
   ItemTransform,
-  RenderImageSource,
   WorkerLoadedImage,
   ItemRenderContext,
   SubCompRenderData,
   GpuTextTextureCacheEntry,
   GpuBitmapMaskTextureCacheEntry,
-  TransitionParticipantRenderState,
 } from './types'
 
 export { renderItem } from './render-item'
@@ -30,5 +28,3 @@ export {
 } from './transition'
 
 export { renderItemGpuEffectsToTexture, renderPreviewVideoGpuEffectsToCanvas } from './gpu'
-
-export { calculateMediaDrawDimensions } from './media-draw'

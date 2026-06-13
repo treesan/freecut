@@ -4,7 +4,9 @@ import type { PlayerRef } from '@/features/preview/deps/player-core'
 import { getGlobalVideoSourcePool } from '@/features/preview/deps/player-pool'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { usePreviewBridgeStore } from '@/shared/state/preview-bridge'
-import type { TimelineItem, TimelineTrack } from '@/types/timeline'
+import { useCompositionsStore } from '@/features/preview/deps/timeline-store'
+import { blobUrlManager } from '@/infrastructure/browser/blob-url-manager'
+import type { TimelineItem, TimelineTrack, VideoItem } from '@/types/timeline'
 import type { ResolvedTransitionWindow } from '@/shared/timeline/transitions/transition-planner'
 import { useGizmoStore } from '../stores/gizmo-store'
 import { useCornerPinStore } from '../stores/corner-pin-store'
@@ -45,7 +47,17 @@ import {
   collectVisibleTrackVideoSourceTimesBySrc,
   getVideoItemSourceTimeSeconds,
   resolvePausedVariableSpeedPrewarmPlan,
+  shouldRunJumpPreseek,
 } from '../utils/render-pump-preseek'
+import {
+  beginPlaybackColdStart,
+  cancelPlaybackColdStart,
+  markPlaybackColdStart,
+} from '../utils/playback-cold-start-event'
+import {
+  ensureAudioContextResumed,
+  getPreviewAudioContextState,
+} from '@/features/preview/deps/composition-runtime'
 import {
   resolveBoundarySourcePrewarmCacheUpdate,
   resolvePrewarmFrameQueueAfterEnqueue,
@@ -60,8 +72,24 @@ const logger = createLogger('VideoPreview')
 type TransitionWindow = ResolvedTransitionWindow<TimelineItem>
 type PlaybackTransitionOverlayWindows = Parameters<typeof resolvePlaybackTransitionOverlayState>[0]
 type PlaybackStoreSnapshot = ReturnType<typeof usePlaybackStore.getState>
+type GizmoStoreSnapshot = ReturnType<typeof useGizmoStore.getState>
 
 type FastScrubRenderer = CompositionRendererInstance
+
+function getGizmoPreviewInvalidation(
+  state: GizmoStoreSnapshot,
+  prev: GizmoStoreSnapshot,
+): 'all' | 'frame' | null {
+  const unifiedPreviewChanged = state.preview !== prev.preview
+  const transformPreviewChanged = state.previewTransform !== prev.previewTransform
+  const gradeBypassChanged =
+    state.colorGradeBypassed !== prev.colorGradeBypassed ||
+    state.colorGradeComparisonMode !== prev.colorGradeComparisonMode
+
+  if (gradeBypassChanged) return 'all'
+  if (unifiedPreviewChanged || (transformPreviewChanged && state.activeGizmo)) return 'frame'
+  return null
+}
 
 type PreviewPerfState = {
   fastScrubPrewarmSourceEvictions: number
@@ -897,20 +925,56 @@ export function usePreviewRenderPump({
       playbackRafId = requestAnimationFrame(playbackRafPump)
     }
 
-    // Threshold for triggering background worker preseek on large jumps.
-    // Below this threshold, mediabunny sequential advance is fast (~1ms).
-    // Above it, a keyframe seek is needed (300-600ms) — the worker does it off-thread.
-    const JUMP_PRESEEK_THRESHOLD_FRAMES = Math.round(fps * 3)
-
     // Playback store handlers are kept separate so the subscription reads like
-    // the runtime state machine: preseek, lifecycle, transition upkeep,
-    // paused prewarm, then target-frame routing. That ordering matters because
-    // later handlers intentionally build on side effects from earlier ones.
+    // the runtime state machine: cold-start tracking, preseek, lifecycle,
+    // transition upkeep, paused prewarm, then target-frame routing. That
+    // ordering matters because later handlers intentionally build on side
+    // effects from earlier ones.
+    const trackPlaybackColdStartLifecycle = (
+      state: PlaybackStoreSnapshot,
+      prev: PlaybackStoreSnapshot,
+    ) => {
+      if (state.isPlaying && !prev.isPlaying) {
+        beginPlaybackColdStart({
+          startFrame: state.currentFrame,
+          forceFastScrubOverlay,
+          audioContextState: getPreviewAudioContextState(),
+        })
+        // This subscriber runs synchronously inside the play dispatch, so we
+        // are still within the user gesture's task — resume the shared
+        // AudioContext now instead of waiting for the first per-element
+        // effect/RVFC resume, which lands 50-100ms after first frame.
+        ensureAudioContextResumed()
+      } else if (!state.isPlaying && prev.isPlaying) {
+        // No-op if the measurement already resolved on a frame advance.
+        cancelPlaybackColdStart('paused_before_first_frame_advance')
+      }
+    }
+
+    // Let jump preseek see through compound clips (resolve the referenced
+    // sub-composition) and resolve current-session URLs by mediaId — stored
+    // item src is empty or a stale blob URL on workspace projects, for
+    // main-timeline and sub-comp items alike.
+    const resolvePreseekComposition = (compositionId: string) => {
+      const comp = useCompositionsStore.getState().compositions.find((c) => c.id === compositionId)
+      return comp ? { fps: comp.fps, items: comp.items } : null
+    }
+    const resolvePreseekItemSrc = (item: VideoItem) => {
+      const liveUrl = item.mediaId ? blobUrlManager.get(item.mediaId) : null
+      return liveUrl ?? (item.src || null)
+    }
+
+    // Direction-aware preseek: small forward jumps ride mediabunny sequential
+    // advance (~1ms/frame), but large forward jumps and most backward jumps
+    // need an off-thread keyframe seek (300-600ms) - see shouldRunJumpPreseek.
     const handleLargeJumpPreseek = (state: PlaybackStoreSnapshot, prev: PlaybackStoreSnapshot) => {
       if (
-        state.currentFrame === prev.currentFrame ||
-        Math.abs(state.currentFrame - prev.currentFrame) < JUMP_PRESEEK_THRESHOLD_FRAMES ||
-        state.isPlaying
+        !shouldRunJumpPreseek({
+          prevFrame: prev.currentFrame,
+          nextFrame: state.currentFrame,
+          fps,
+          isPlaying: state.isPlaying,
+        })
       ) {
         return
       }
@@ -918,6 +982,8 @@ export function usePreviewRenderPump({
       runBatchPreseek(
         collectVisibleTrackVideoSourceTimesBySrc(combinedTracks, state.currentFrame, fps, {
           requireExplicitSourceFps: true,
+          resolveComposition: resolvePreseekComposition,
+          resolveItemSrc: resolvePreseekItemSrc,
         }),
       )
     }
@@ -954,8 +1020,10 @@ export function usePreviewRenderPump({
         )
 
         if (prewarmItemIds.length > 0) {
+          markPlaybackColdStart({ variable_speed_items: prewarmItemIds.length })
           playbackPrewarmInFlight = true
           void (async () => {
+            const prewarmGateStartMs = performance.now()
             const renderer = await ensureFastScrubRenderer()
             if (renderer && 'prewarmItems' in renderer) {
               const needsPrewarm = prewarmItemIds.filter((id) => !pausePrewarmedItemIds.has(id))
@@ -963,6 +1031,9 @@ export function usePreviewRenderPump({
                 await renderer.prewarmItems?.(needsPrewarm, frame)
               }
             }
+            markPlaybackColdStart({
+              prewarm_gate_ms: Math.round(performance.now() - prewarmGateStartMs),
+            })
             pausePrewarmedItemIds.clear()
             playbackPrewarmInFlight = false
             if (playbackRafId === null && usePlaybackStore.getState().isPlaying) {
@@ -1319,6 +1390,19 @@ export function usePreviewRenderPump({
       previewPerfRef.current.scrubDroppedFrames += scrubDirectionPlan.scrubDroppedFrames
 
       if (
+        playStateChanged &&
+        useGizmoStore.getState().colorGradeComparisonMode === 'split' &&
+        scrubRendererRef.current
+      ) {
+        if (targetFrame !== null) {
+          scrubRendererRef.current.invalidateFrameCache({ frames: [targetFrame] })
+        } else {
+          scrubRendererRef.current.invalidateFrameCache()
+        }
+        setDisplayedFrame(null)
+      }
+
+      if (
         targetFrame !== null &&
         scrubRendererRef.current &&
         'getScrubbingCache' in scrubRendererRef.current
@@ -1447,6 +1531,7 @@ export function usePreviewRenderPump({
     }
 
     const unsubscribe = usePlaybackStore.subscribe((state, prev) => {
+      trackPlaybackColdStartLifecycle(state, prev)
       handleLargeJumpPreseek(state, prev)
       handlePlaybackLifecycleUpdate(state, prev)
       handleActivePlaybackTransitionMaintenance(state)
@@ -1465,20 +1550,31 @@ export function usePreviewRenderPump({
       // mediabunny (exact), causing a visible frame shift — especially at
       // soft-edge crop boundaries where the content difference is amplified.
       if (!forceFastScrubOverlay) return
-      const unifiedPreviewChanged = state.preview !== prev.preview
-      const transformPreviewChanged = state.previewTransform !== prev.previewTransform
-      // Gizmo transform changes require an active gizmo; effect preview changes don't.
-      if (!unifiedPreviewChanged && !(transformPreviewChanged && state.activeGizmo)) return
+      const invalidation = getGizmoPreviewInvalidation(state, prev)
+      if (!invalidation) return
 
       const playbackState = usePlaybackStore.getState()
       const currentFrame = playbackState.currentFrame
+      const gradeBypassChanged =
+        state.colorGradeBypassed !== prev.colorGradeBypassed ||
+        state.colorGradeComparisonMode !== prev.colorGradeComparisonMode
 
       // Preview-only changes don't advance the frame number, so the frame
       // cache would otherwise return the stale bitmap for the current frame.
       // Invalidate before requesting a repaint so gizmo resize/translate and
-      // live panel previews re-composite immediately.
-      if ((unifiedPreviewChanged || transformPreviewChanged) && scrubRendererRef.current) {
+      // live panel previews re-composite immediately. Grade bypass affects
+      // every frame, so it evicts the whole cache.
+      if (invalidation === 'all' && scrubRendererRef.current) {
+        scrubRendererRef.current.invalidateFrameCache()
+        scrubOffscreenRenderedFrameRef.current = null
+      } else if (scrubRendererRef.current) {
         scrubRendererRef.current.invalidateFrameCache({ frames: [currentFrame] })
+        if (scrubOffscreenRenderedFrameRef.current === currentFrame) {
+          scrubOffscreenRenderedFrameRef.current = null
+        }
+      }
+      if (gradeBypassChanged) {
+        setDisplayedFrame(null)
       }
 
       scrubRequestedFrameRef.current = currentFrame

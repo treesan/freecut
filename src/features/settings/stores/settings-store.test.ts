@@ -8,7 +8,7 @@ const DEFAULT_SETTINGS = {
   enableFilmstripExtraction: true,
   editorDensity: 'compact' as const,
   maxUndoHistory: 50,
-  autoSaveInterval: 0,
+  autoSaveInterval: 5,
   defaultWhisperModel: 'whisper-small' as const,
   defaultWhisperQuantization: 'hybrid' as const,
   defaultWhisperLanguage: '',
@@ -27,7 +27,7 @@ describe('settings-store', () => {
     expect(state.enableFilmstripExtraction).toBe(true)
     expect(state.editorDensity).toBe('compact')
     expect(state.maxUndoHistory).toBe(50)
-    expect(state.autoSaveInterval).toBe(0)
+    expect(state.autoSaveInterval).toBe(5)
     expect(state.defaultWhisperModel).toBe('whisper-small')
     expect(state.defaultWhisperQuantization).toBe('hybrid')
     expect(state.defaultWhisperLanguage).toBe('')

@@ -11,7 +11,20 @@ import {
   updateProject,
 } from './projects'
 import { setWorkspaceRoot } from './root'
-import { asHandle, createRoot, readFileText } from './__tests__/in-memory-handle'
+import { asHandle, createRoot, readFileText, MemDir } from './__tests__/in-memory-handle'
+
+/** Overwrite a file in the in-memory FS with arbitrary raw text. */
+async function corruptFile(dir: MemDir, ...segments: string[]): Promise<void> {
+  let current = dir
+  for (let i = 0; i < segments.length - 1; i++) {
+    current = await current.getDirectoryHandle(segments[i]!)
+  }
+  const filename = segments[segments.length - 1]!
+  const fh = await current.getFileHandle(filename, { create: true })
+  const writable = await fh.createWritable()
+  await writable.write('{not json')
+  await writable.close()
+}
 
 function makeProject(id: string, name = 'Test', updatedAt = 1000): Project {
   return {
@@ -179,5 +192,67 @@ describe('workspace-fs projects', () => {
     await createProject(makeProject('b'))
     const stats = await getDBStats()
     expect(stats.projectCount).toBe(2)
+  })
+
+  it('corrupt project.json is skipped by getAllProjects', async () => {
+    const root = createRoot()
+    setWorkspaceRoot(asHandle(root))
+    await createProject(makeProject('p1', 'Good'))
+    await createProject(makeProject('p2', 'WillCorrupt'))
+
+    // Corrupt p2's project.json
+    await corruptFile(root, 'projects', 'p2', 'project.json')
+
+    const projects = await getAllProjects()
+    expect(projects).toHaveLength(1)
+    expect(projects[0]!.id).toBe('p1')
+  })
+
+  it('corrupt project.json does not break other projects CRUD', async () => {
+    const root = createRoot()
+    setWorkspaceRoot(asHandle(root))
+    await createProject(makeProject('p1', 'Good'))
+    await createProject(makeProject('p2', 'WillCorrupt'))
+
+    // Corrupt p2's project.json
+    await corruptFile(root, 'projects', 'p2', 'project.json')
+
+    // Creating another project should succeed despite p2 being corrupt
+    await createProject(makeProject('p3', 'New'))
+
+    const indexText = await readFileText(root, 'index.json')
+    const index = JSON.parse(indexText!)
+    const ids: string[] = index.projects.map((p: { id: string }) => p.id)
+    expect(ids).toContain('p1')
+    expect(ids).toContain('p3')
+    expect(ids).not.toContain('p2')
+  })
+
+  it('corrupt index.json self-heals: getAllProjects returns healthy projects', async () => {
+    const root = createRoot()
+    setWorkspaceRoot(asHandle(root))
+    await createProject(makeProject('p1', 'Healthy'))
+
+    // Corrupt index.json
+    await corruptFile(root, 'index.json')
+
+    const projects = await getAllProjects()
+    expect(projects).toHaveLength(1)
+    expect(projects[0]!.id).toBe('p1')
+
+    // index.json should now be valid JSON again
+    const indexText = await readFileText(root, 'index.json')
+    expect(() => JSON.parse(indexText!)).not.toThrow()
+  })
+
+  it('getProject on a corrupt project still throws', async () => {
+    const root = createRoot()
+    setWorkspaceRoot(asHandle(root))
+    await createProject(makeProject('p2', 'WillCorrupt'))
+
+    // Corrupt p2's project.json
+    await corruptFile(root, 'projects', 'p2', 'project.json')
+
+    await expect(getProject('p2')).rejects.toThrow(/Failed to load project/)
   })
 })

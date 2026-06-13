@@ -11,8 +11,6 @@ export {
 export {
   applyTransformOverride,
   resolveItemTransformAtFrame,
-  resolveItemTransformAtRelativeFrame,
-  resolveActiveShapeMasksAtFrame,
 } from '@/runtime/composition-runtime/utils/frame-scene'
 export type { PreviewPathVerticesOverride } from '@/runtime/composition-runtime/utils/preview-path-override'
 export { expandTextTransformToFitContent } from '@/runtime/composition-runtime/utils/text-layout'
@@ -30,7 +28,7 @@ export {
   snapSourceTime,
 } from '@/runtime/composition-runtime/utils/video-timing'
 export {
+  ensureAudioContextResumed,
+  getPreviewAudioContextState,
   transitionSafePlay,
-  muteTransitionElement,
-  unmuteTransitionElement,
 } from '@/runtime/composition-runtime/components/video-audio-context'

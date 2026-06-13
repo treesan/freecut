@@ -6,6 +6,20 @@ import type { CropSettings } from '@/types/transform'
 import { calculateTransform } from '../utils/transform-calculations'
 import { applySnapping, applyScaleSnapping, type SnapLine } from '../utils/canvas-snap-utils'
 
+export type ColorGradeComparisonMode = 'off' | 'before' | 'split'
+
+const DEFAULT_COLOR_GRADE_SPLIT_POSITION = 0.5
+const MIN_COLOR_GRADE_SPLIT_POSITION = 0.05
+const MAX_COLOR_GRADE_SPLIT_POSITION = 0.95
+
+function clampColorGradeSplitPosition(position: number): number {
+  if (!Number.isFinite(position)) return DEFAULT_COLOR_GRADE_SPLIT_POSITION
+  return Math.max(
+    MIN_COLOR_GRADE_SPLIT_POSITION,
+    Math.min(MAX_COLOR_GRADE_SPLIT_POSITION, position),
+  )
+}
+
 /** Item properties that can be previewed (non-transform) */
 export interface ItemPropertiesPreview {
   fadeIn?: number
@@ -107,21 +121,6 @@ export interface ItemPreview {
   effects?: ItemEffect[]
 }
 
-/**
- * Check if a partial transform has all required properties (full transform).
- * Full transforms replace the base; partial transforms merge with base.
- */
-export function isFullTransform(t?: Partial<Transform>): t is Transform {
-  if (!t) return false
-  return (
-    t.x !== undefined &&
-    t.y !== undefined &&
-    t.width !== undefined &&
-    t.height !== undefined &&
-    t.rotation !== undefined
-  )
-}
-
 interface GizmoStoreState {
   /** Current gizmo interaction state (null when not interacting) */
   activeGizmo: GizmoState | null
@@ -156,6 +155,15 @@ interface GizmoStoreState {
   preview: Record<string, ItemPreview> | null
   /** Canvas background color preview (during color picker drag) */
   canvasBackgroundPreview: string | null
+  /**
+   * Preview-only bypass of all color-category effects (grade bypass).
+   * Used for before/after comparison while grading; never affects export.
+   */
+  colorGradeBypassed: boolean
+  /** Preview-only color grade comparison mode for before/after workflows. */
+  colorGradeComparisonMode: ColorGradeComparisonMode
+  /** Preview-only split comparison position as a normalized 0-1 horizontal wipe. */
+  colorGradeSplitPosition: number
 }
 
 interface GizmoStoreActions {
@@ -247,6 +255,15 @@ interface GizmoStoreActions {
    */
   setEffectsPreviewNew: (effects: Record<string, ItemEffect[]>) => void
 
+  /** Toggle preview-only color grade bypass (before/after comparison) */
+  toggleColorGradeBypass: () => void
+
+  /** Set the preview-only color grade comparison mode */
+  setColorGradeComparisonMode: (mode: ColorGradeComparisonMode) => void
+
+  /** Set the preview-only color grade split/wipe position */
+  setColorGradeSplitPosition: (position: number) => void
+
   /** Clear all preview data */
   clearPreview: () => void
 
@@ -271,6 +288,9 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>((set, g
   otherItemBounds: [],
   preview: null,
   canvasBackgroundPreview: null,
+  colorGradeBypassed: false,
+  colorGradeComparisonMode: 'off',
+  colorGradeSplitPosition: DEFAULT_COLOR_GRADE_SPLIT_POSITION,
 
   // Actions
   setCanvasSize: (width, height) => set({ canvasSize: { width, height } }),
@@ -490,6 +510,25 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>((set, g
     }
     set({ preview: merged })
   },
+
+  toggleColorGradeBypass: () =>
+    set((state) => {
+      const nextMode: ColorGradeComparisonMode =
+        state.colorGradeComparisonMode === 'before' || state.colorGradeBypassed ? 'off' : 'before'
+      return {
+        colorGradeBypassed: nextMode !== 'off',
+        colorGradeComparisonMode: nextMode,
+      }
+    }),
+
+  setColorGradeComparisonMode: (mode) =>
+    set({
+      colorGradeBypassed: mode !== 'off',
+      colorGradeComparisonMode: mode,
+    }),
+
+  setColorGradeSplitPosition: (position) =>
+    set({ colorGradeSplitPosition: clampColorGradeSplitPosition(position) }),
 
   clearPreview: () => set({ preview: null }),
 

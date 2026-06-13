@@ -96,7 +96,9 @@ interface KeyframeGraphPanelProps {
   /** Callback to close the panel */
   onClose: () => void
   /** Where the panel is docked in the layout */
-  placement?: 'bottom' | 'top'
+  placement?: 'bottom' | 'top' | 'side'
+  /** Side-lane docks stay persistent and should not expose a close affordance. */
+  showCloseButton?: boolean
 }
 
 type KeyframeEditorMode = 'graph' | 'dopesheet'
@@ -274,6 +276,52 @@ function toSpringDraft(params: SpringParameters): Record<SpringInputKey, string>
     friction: String(params.friction),
     mass: String(params.mass),
   }
+}
+
+function useKeyframeEditorPlaybackFrame(selectedItemId: string | null): number {
+  const [frame, setFrame] = useState(() => usePlaybackStore.getState().currentFrame)
+  const frameRef = useRef(frame)
+
+  useEffect(() => {
+    const nextFrame = usePlaybackStore.getState().currentFrame
+    frameRef.current = nextFrame
+    setFrame(nextFrame)
+  }, [selectedItemId])
+
+  useEffect(() => {
+    let wasPlaying = usePlaybackStore.getState().isPlaying
+
+    const commitFrame = (nextFrame: number) => {
+      if (frameRef.current === nextFrame) return
+      frameRef.current = nextFrame
+      setFrame(nextFrame)
+    }
+
+    const unsubscribe = usePlaybackStore.subscribe((state) => {
+      const nextFrame = state.currentFrame
+
+      if (state.isPlaying) {
+        wasPlaying = true
+        return
+      }
+
+      if (wasPlaying) {
+        wasPlaying = false
+        commitFrame(nextFrame)
+        return
+      }
+
+      const isSettledSeek = state.previewFrame === null
+      const isPanelScrub = selectedItemId !== null && state.previewItemId === selectedItemId
+      if (isSettledSeek || isPanelScrub) {
+        commitFrame(nextFrame)
+      }
+    })
+
+    return unsubscribe
+  }, [selectedItemId])
+
+  return frame
 }
 
 function loadKeyframeEditorMode(): KeyframeEditorMode {
@@ -506,6 +554,7 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   isOpen,
   onClose,
   placement = 'bottom',
+  showCloseButton = true,
 }: KeyframeGraphPanelProps) {
   const { t } = useTranslation()
   const easingOptions = useMemo(
@@ -689,8 +738,9 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   const cutSelectedKeyframes = useKeyframeSelectionStore((s) => s.cutSelectedKeyframes)
   const clearKeyframeClipboard = useKeyframeSelectionStore((s) => s.clearClipboard)
 
-  // Playback state
-  const currentFrame = usePlaybackStore((s) => s.currentFrame)
+  // Playback state: follow this panel's own scrubs live, but defer external
+  // timeline scrubs until release so the Color workspace dock stays out of the hot path.
+  const currentFrame = useKeyframeEditorPlaybackFrame(selectedItemForEditor?.id ?? null)
 
   // Track selected property for graph editor
   const [selectedProperty, setSelectedProperty] = useState<AnimatableProperty | null>(null)
@@ -1423,8 +1473,15 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
     [selectedItemForEditor],
   )
 
+  const isSidePlacement = placement === 'side'
+
   // Clamp content height when max shrinks (e.g. parent resized smaller)
   const clampedContentHeight = Math.min(contentHeight, maxContentHeight)
+  const sideContentHeight = Math.max(
+    MIN_CONTENT_HEIGHT,
+    parentHeight > 0 ? parentHeight - GRAPH_PANEL_HEADER_HEIGHT : MIN_CONTENT_HEIGHT,
+  )
+  const resolvedContentHeight = isSidePlacement ? sideContentHeight : clampedContentHeight
 
   // Calculate total panel height for proper flex sizing
   // When closed, show just the header; when open, show header + resize handle + content
@@ -1453,7 +1510,7 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   )
   const editorHeight = Math.max(
     0,
-    clampedContentHeight - 16 - advancedControlsHeight - (showAdvancedControls ? 8 : 0),
+    resolvedContentHeight - 16 - advancedControlsHeight - (showAdvancedControls ? 8 : 0),
   )
   // Only render the docked editor when explicitly opened from the toolbar/hotkey.
   // Selecting a clip should not surface the docked panel by itself.
@@ -1506,11 +1563,15 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
       }}
       className={cn(
         'flex-shrink-0 bg-background overflow-hidden outline-none',
-        placement === 'top' ? 'border-b border-border' : 'border-t border-border',
+        isSidePlacement
+          ? 'flex h-full min-h-0 flex-col border-0'
+          : placement === 'top'
+            ? 'border-b border-border'
+            : 'border-t border-border',
         isOpen ? 'opacity-100' : 'opacity-90',
-        !isResizing && 'transition-all duration-200',
+        !isSidePlacement && !isResizing && 'transition-all duration-200',
       )}
-      style={{ height: panelHeight }}
+      style={isSidePlacement ? undefined : { height: panelHeight }}
     >
       {placement === 'bottom' && resizeHandle}
 
@@ -1553,24 +1614,30 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
           >
             {t('timeline.keyframeEditor.sheet')}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 p-0"
-            aria-label={t('common.close')}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose()
-            }}
-          >
-            <X className="w-3 h-3" />
-          </Button>
+          {showCloseButton && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 p-0"
+              aria-label={t('common.close')}
+              onClick={(e) => {
+                e.stopPropagation()
+                onClose()
+              }}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Keyframe editor content */}
       {isOpen && (
-        <div ref={containerRef} className="p-2" style={{ height: clampedContentHeight }}>
+        <div
+          ref={containerRef}
+          className={cn('min-h-0 p-2', isSidePlacement && 'flex-1')}
+          style={isSidePlacement ? undefined : { height: clampedContentHeight }}
+        >
           {showAdvancedControls && (
             <AdvancedEasingControls
               key={advancedControlsKey}

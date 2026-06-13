@@ -4,7 +4,9 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEventHandler,
+  type PointerEventHandler,
   type ReactNode,
   type RefObject,
 } from 'react'
@@ -16,6 +18,7 @@ import { usePlaybackStore } from '@/shared/state/playback'
 import { EDITOR_LAYOUT_CSS_VALUES } from '@/config/editor-layout'
 import { FAST_SCRUB_RENDERER_ENABLED } from '../utils/preview-constants'
 import { getPreviewPixelSnapOffset, ZERO_PIXEL_SNAP_OFFSET } from '../utils/preview-pixel-snap'
+import type { ColorGradeComparisonMode } from '../stores/gizmo-store'
 
 interface PreviewStageProps {
   backgroundRef: RefObject<HTMLDivElement | null>
@@ -29,6 +32,10 @@ interface PreviewStageProps {
   fps: number
   isResolving: boolean
   isRenderedOverlayVisible: boolean
+  isSplitGradeAfterVisible?: boolean
+  colorGradeComparisonMode?: ColorGradeComparisonMode
+  colorGradeSplitPosition?: number
+  onColorGradeSplitPositionChange?: (position: number) => void
   inputProps: CompositionInputProps
   onBackgroundClick: MouseEventHandler<HTMLDivElement>
   onFrameChange: (frame: number) => void
@@ -51,6 +58,10 @@ export const PreviewStage = memo(function PreviewStage({
   fps,
   isResolving,
   isRenderedOverlayVisible,
+  isSplitGradeAfterVisible = false,
+  colorGradeComparisonMode = 'off',
+  colorGradeSplitPosition = 0.5,
+  onColorGradeSplitPositionChange,
   inputProps,
   onBackgroundClick,
   onFrameChange,
@@ -63,10 +74,12 @@ export const PreviewStage = memo(function PreviewStage({
   const { t } = useTranslation()
   const useProxy = usePlaybackStore((s) => s.useProxy)
   const pixelSnapAnchorRef = useRef<HTMLDivElement | null>(null)
+  const playerSurfaceRef = useRef<HTMLDivElement | null>(null)
   const [pixelSnapOffset, setPixelSnapOffset] = useState(ZERO_PIXEL_SNAP_OFFSET)
 
   const setPixelSnappedPlayerContainerRef = useCallback(
     (el: HTMLDivElement | null) => {
+      playerSurfaceRef.current = el
       setPlayerContainerRefCallback(el)
     },
     [setPlayerContainerRefCallback],
@@ -113,6 +126,56 @@ export const PreviewStage = memo(function PreviewStage({
       ? `translate3d(${pixelSnapOffset.x}px, ${pixelSnapOffset.y}px, 0)`
       : undefined
   const isTimelineEmpty = inputProps.tracks.every((track) => track.items.length === 0)
+  const isSplitGradeComparison = colorGradeComparisonMode === 'split'
+  const splitPosition = Math.max(0.05, Math.min(0.95, colorGradeSplitPosition))
+  const splitPercent = splitPosition * 100
+  const splitClipPath = `inset(0 ${100 - splitPercent}% 0 0)`
+
+  const updateSplitPositionFromPointer = useCallback(
+    (event: { clientX: number }) => {
+      const surface = playerSurfaceRef.current
+      if (!surface || !onColorGradeSplitPositionChange) return
+      const rect = surface.getBoundingClientRect()
+      if (rect.width <= 0) return
+      const next = (event.clientX - rect.left) / rect.width
+      onColorGradeSplitPositionChange(Math.max(0.05, Math.min(0.95, next)))
+    },
+    [onColorGradeSplitPositionChange],
+  )
+
+  const handleSplitPointerDown: PointerEventHandler<HTMLButtonElement> = useCallback(
+    (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      updateSplitPositionFromPointer(event)
+    },
+    [updateSplitPositionFromPointer],
+  )
+
+  const handleSplitPointerMove: PointerEventHandler<HTMLButtonElement> = useCallback(
+    (event) => {
+      if (event.buttons !== 1) return
+      event.preventDefault()
+      updateSplitPositionFromPointer(event)
+    },
+    [updateSplitPositionFromPointer],
+  )
+
+  const handleSplitKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!onColorGradeSplitPositionChange) return
+      let next: number | null = null
+      if (event.key === 'ArrowLeft') next = splitPosition - (event.shiftKey ? 0.1 : 0.01)
+      if (event.key === 'ArrowRight') next = splitPosition + (event.shiftKey ? 0.1 : 0.01)
+      if (event.key === 'Home') next = 0.05
+      if (event.key === 'End') next = 0.95
+      if (next === null) return
+      event.preventDefault()
+      onColorGradeSplitPositionChange(Math.max(0.05, Math.min(0.95, next)))
+    },
+    [onColorGradeSplitPositionChange, splitPosition],
+  )
 
   return (
     <div
@@ -193,32 +256,80 @@ export const PreviewStage = memo(function PreviewStage({
               </HeadlessPlayer>
 
               {FAST_SCRUB_RENDERER_ENABLED && (
-                <canvas
-                  ref={scrubCanvasRef}
-                  className="absolute inset-0 pointer-events-none"
+                <div
+                  className="absolute left-0 top-0 pointer-events-none"
+                  data-grade-comparison-before-layer={isSplitGradeComparison ? 'true' : undefined}
                   style={{
                     width: '100%',
                     height: '100%',
                     zIndex: 4,
                     visibility: isRenderedOverlayVisible ? 'visible' : 'hidden',
+                    clipPath: isSplitGradeComparison ? splitClipPath : undefined,
                     backgroundColor: '#000',
                   }}
-                />
+                >
+                  <canvas
+                    ref={scrubCanvasRef}
+                    className="absolute left-0 top-0 pointer-events-none"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      maxWidth: 'none',
+                      maxHeight: 'none',
+                      visibility: isRenderedOverlayVisible ? 'visible' : 'hidden',
+                    }}
+                  />
+                </div>
               )}
 
               <canvas
                 ref={gpuEffectsCanvasRef}
                 className="absolute inset-0 pointer-events-none"
+                data-grade-comparison-after-layer={
+                  isSplitGradeAfterVisible ? 'true' : undefined
+                }
                 style={{
                   width: '100%',
                   height: '100%',
-                  zIndex: 5,
-                  visibility: 'hidden',
+                  zIndex: isSplitGradeAfterVisible ? 3 : 5,
+                  visibility: isSplitGradeAfterVisible ? 'visible' : 'hidden',
                 }}
               />
 
               {perfPanel}
               {comparisonOverlay}
+              {isSplitGradeComparison && (
+                <div
+                  className="pointer-events-none absolute inset-0 z-[6]"
+                  aria-label={t('preview.stage.gradeComparisonSplit')}
+                >
+                  <div className="absolute bottom-2 left-2 rounded-sm bg-black/65 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/90">
+                    {t('preview.stage.gradeComparisonBefore')}
+                  </div>
+                  <div className="absolute bottom-2 right-2 rounded-sm bg-black/65 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/90">
+                    {t('preview.stage.gradeComparisonAfter')}
+                  </div>
+                  <button
+                    type="button"
+                    role="slider"
+                    aria-label={t('preview.stage.gradeComparisonWipe')}
+                    aria-valuemin={5}
+                    aria-valuemax={95}
+                    aria-valuenow={Math.round(splitPercent)}
+                    aria-valuetext={`${Math.round(splitPercent)}%`}
+                    className="pointer-events-auto absolute top-0 h-full w-6 -translate-x-1/2 cursor-ew-resize touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/90"
+                    style={{ left: `${splitPercent}%` }}
+                    onPointerDown={handleSplitPointerDown}
+                    onPointerMove={handleSplitPointerMove}
+                    onKeyDown={handleSplitKeyDown}
+                  >
+                    <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/80 shadow-[0_0_0_1px_rgba(0,0,0,0.5)]" />
+                    <span className="absolute left-1/2 top-1/2 flex h-8 w-3 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-black/55 shadow-sm">
+                      <span className="h-4 w-px bg-white/80" />
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {overlayControls}

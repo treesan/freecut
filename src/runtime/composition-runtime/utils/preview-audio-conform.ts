@@ -1,6 +1,6 @@
 import { blobUrlManager } from '@/infrastructure/browser/blob-url-manager'
 import { getMedia, updateMedia } from '@/infrastructure/storage'
-import { opfsService } from '@/runtime/composition-runtime/deps/media-library'
+import { opfsService } from '@/runtime/composition-runtime/deps/media-library-opfs'
 import { createLogger } from '@/shared/logging/logger'
 import type { MediaMetadata } from '@/types/storage'
 import {
@@ -19,12 +19,8 @@ const PREVIEW_AUDIO_CONFORM_MIME_TYPE = 'audio/wav'
 const pendingPreviewAudioConformLoads = new Map<string, Promise<string | null>>()
 const pendingPreviewAudioConformPersists = new Map<string, Promise<void>>()
 
-export function getPreviewAudioConformCacheKey(mediaId: string): string {
+function getPreviewAudioConformCacheKey(mediaId: string): string {
   return `preview-audio:${mediaId}`
-}
-
-export function getCachedPreviewAudioConformUrl(mediaId: string): string | null {
-  return blobUrlManager.get(getPreviewAudioConformCacheKey(mediaId))
 }
 
 /**

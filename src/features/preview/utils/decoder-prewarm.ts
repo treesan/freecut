@@ -182,6 +182,18 @@ function ensureWorkerPool(): void {
   decoderPrewarmMetrics.poolSize = workerPool.length
 }
 
+/**
+ * Eagerly spawn the worker pool (each worker preloads mediabunny WASM on
+ * creation) so the first real preseek of a session doesn't pay worker spawn +
+ * WASM load on top of the decode. Safe to call repeatedly — the pool is a
+ * module singleton. Called from the preview's idle-time warmup alongside the
+ * fast-scrub renderer.
+ */
+export function warmDecoderPrewarmWorkerPool(): void {
+  if (typeof Worker === 'undefined') return
+  ensureWorkerPool()
+}
+
 /** Acquire the least-busy worker from the pool. */
 function acquireWorker(): PoolWorker | null {
   ensureWorkerPool()
@@ -584,17 +596,6 @@ export function getCachedPredecodedBitmap(
   return findClosestBitmapEntry(src, timestamp, toleranceSeconds)?.bitmap ?? null
 }
 
-/**
- * Get the in-flight preseek promise for a source, if one is pending.
- * The render engine can await this instead of starting a blocking
- * main-thread mediabunny decode — the worker is already doing the work.
- */
-export function getInflightPreseek(src: string): Promise<ImageBitmap | null> | null {
-  const entries = inflightPreseekBySrc.get(src)
-  const lastEntry = entries && entries.length > 0 ? entries[entries.length - 1] : null
-  return lastEntry?.promise ?? null
-}
-
 export async function waitForInflightPredecodedBitmap(
   src: string,
   timestamp: number,
@@ -644,7 +645,7 @@ export async function waitForInflightPredecodedBitmap(
 /**
  * Clear cached bitmaps for a source.
  */
-export function clearPredecodedCache(src?: string): void {
+function clearPredecodedCache(src?: string): void {
   if (src) {
     const entries = bitmapCache.get(src)
     if (entries) {

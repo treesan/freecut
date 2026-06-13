@@ -6,21 +6,10 @@
  * registry. That lets us swap captioning models without changing call sites.
  */
 
-import {
-  getDefaultMediaCaptioningProvider,
-  mediaCaptioningProviderRegistry,
-  DEFAULT_MEDIA_CAPTIONING_PROVIDER_ID,
-} from './captioning/registry'
-import type {
-  CaptioningOptions,
-  CaptioningProgress,
-  MediaCaption,
-  MediaCaptioningProvider,
-} from './captioning/types'
+import { getDefaultMediaCaptioningProvider } from './captioning/registry'
+import type { CaptioningOptions, MediaCaption } from './captioning/types'
 
-export type { CaptioningOptions, CaptioningProgress, MediaCaption, MediaCaptioningProvider }
-
-export { mediaCaptioningProviderRegistry, DEFAULT_MEDIA_CAPTIONING_PROVIDER_ID }
+export type { MediaCaption }
 
 export async function captionVideo(
   video: HTMLVideoElement,

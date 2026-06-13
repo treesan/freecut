@@ -12,16 +12,6 @@ export {
   CLIP_EMBEDDING_DIM,
   buildEmbeddingText,
   extractDominantColors,
-  extractDominantColorPhrase,
   deltaE2000,
-  rgbToLab,
 } from '@/infrastructure/analysis/embeddings'
-export type {
-  EmbeddingsOptions,
-  EmbeddingsProgress,
-  EmbeddingsProvider,
-  BuildEmbeddingTextInput,
-  TranscriptSegment,
-  PaletteEntry,
-  LabColor,
-} from '@/infrastructure/analysis/embeddings'
+export type { PaletteEntry, LabColor } from '@/infrastructure/analysis/embeddings'

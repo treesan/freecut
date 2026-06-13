@@ -6,14 +6,14 @@ import { useTranslation } from 'react-i18next'
 // Types
 // ---------------------------------------------------------------------------
 
-export interface FloatingPanelBounds {
+interface FloatingPanelBounds {
   x: number
   y: number
   width: number
   height: number
 }
 
-export interface FloatingPanelProps {
+interface FloatingPanelProps {
   /** Content rendered inside the panel body */
   children: ReactNode
   /** Panel title shown in the drag handle header */

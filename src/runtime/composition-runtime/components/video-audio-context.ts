@@ -19,6 +19,7 @@ import type { ResolvedAudioEqSettings } from '@/types/audio'
 import {
   createPreviewClipAudioGraph,
   getSharedPreviewAudioContext,
+  peekSharedPreviewAudioContext,
   rampPreviewClipEq,
   rampPreviewClipGain,
   setPreviewClipEq,
@@ -100,6 +101,14 @@ export function ensureAudioContextResumed(): void {
   }
 }
 
+/**
+ * State of the shared preview AudioContext without creating one — `null` when
+ * no context exists yet. Used by playback cold-start instrumentation.
+ */
+export function getPreviewAudioContextState(): AudioContextState | null {
+  return peekSharedPreviewAudioContext()?.state ?? null
+}
+
 /** Expose connected-element tracking for use by video-content acquisition logic. */
 export { connectedVideoElements, videoAudioContexts }
 
@@ -109,7 +118,7 @@ export { connectedVideoElements, videoAudioContexts }
  * so the DOM element must be silent to prevent doubling.
  * Operates directly on the gain node, bypassing React state for zero latency.
  */
-export function muteTransitionElement(video: HTMLVideoElement): void {
+function muteTransitionElement(video: HTMLVideoElement): void {
   const graph = videoAudioGraphs.get(video)
   const audioContext = videoAudioContexts.get(video)
   if (graph && audioContext && audioContext.state === 'running') {
@@ -118,23 +127,6 @@ export function muteTransitionElement(video: HTMLVideoElement): void {
     setPreviewClipGain(graph, 0)
   } else {
     video.volume = 0
-  }
-}
-
-/**
- * Restore a video element's audio after a transition ends. Ramps gain to the
- * target volume over GAIN_RAMP_SECONDS to prevent a click.
- */
-export function unmuteTransitionElement(video: HTMLVideoElement, targetVolume: number): void {
-  const graph = videoAudioGraphs.get(video)
-  const audioContext = videoAudioContexts.get(video)
-  const safeVolume = Math.max(0, targetVolume)
-  if (graph && audioContext && audioContext.state === 'running') {
-    rampPreviewClipGain(graph, safeVolume)
-  } else if (graph) {
-    setPreviewClipGain(graph, safeVolume)
-  } else {
-    video.volume = Math.min(1, safeVolume)
   }
 }
 

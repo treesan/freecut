@@ -12,7 +12,6 @@ import { useItemsStore } from '../stores/items-store'
 import { useSelectionStore } from '@/shared/state/selection'
 import { useEditorStore } from '@/shared/state/editor'
 import { useTimelineStore } from '../stores/timeline-store'
-import { usePlaybackStore } from '@/shared/state/playback'
 import { HOTKEY_OPTIONS } from '@/config/hotkeys'
 import { useSettingsStore, useResolvedHotkeys } from '@/features/timeline/deps/settings'
 
@@ -43,6 +42,7 @@ import {
   isDragEventOverTimelineDropTarget,
   isExternalTimelineDragEvent,
 } from '../utils/timeline-external-drag'
+import { getDefaultActiveTrackId } from '../utils/default-active-track'
 
 const logger = createLogger('Timeline')
 
@@ -139,8 +139,6 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
   const [trackRowsViewportHeight, setTrackRowsViewportHeight] = useState(0)
   const [sectionDividerPosition, setSectionDividerPosition] = useState<number | null>(null)
 
-  const colorScopesOpen = useEditorStore((s) => s.colorScopesOpen)
-  const toggleColorScopesOpen = useEditorStore((s) => s.toggleColorScopesOpen)
   const toggleKeyframeEditorOpen = useEditorStore((s) => s.toggleKeyframeEditorOpen)
   const setTimelineTracks = useTimelineStore((s) => s.setTracks)
 
@@ -385,15 +383,14 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
     [handleSectionDividerMouseDown, hasTrackSections],
   )
 
-  // Set first track as active on mount
-  // Use primitive dependencies to avoid re-running on unrelated track changes
+  // Set the default edit target on mount.
   const tracksLength = tracks.length
-  const firstTrackId = tracks[0]?.id
+  const defaultActiveTrackId = useMemo(() => getDefaultActiveTrackId(tracks), [tracks])
   useEffect(() => {
-    if (tracksLength > 0 && !activeTrackId && firstTrackId) {
-      setActiveTrack(firstTrackId)
+    if (tracksLength > 0 && !activeTrackId && defaultActiveTrackId) {
+      setActiveTrack(defaultActiveTrackId)
     }
-  }, [tracksLength, activeTrackId, firstTrackId, setActiveTrack])
+  }, [tracksLength, activeTrackId, defaultActiveTrackId, setActiveTrack])
 
   useEffect(() => {
     const syncPairs = [
@@ -530,7 +527,9 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
     }
   }, [isTrackDragging])
 
-  // Keyboard shortcuts for in/out markers
+  // Keyboard shortcut: Escape exits the active composition.
+  // In/out shortcuts are registered by useTimelineShortcuts so they remain
+  // available when the compact Color timeline replaces this component.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Another focused panel (e.g. Source Monitor) already handled this key.
@@ -554,33 +553,6 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
         }
       }
 
-      // 'I' key - Set in-point at main playhead
-      if (key === 'i' && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault()
-        const { currentFrame } = usePlaybackStore.getState()
-        useTimelineStore.getState().setInPoint(currentFrame)
-      }
-
-      // 'Shift+I' key - Set in-point at skimmer playhead when available
-      else if (key === 'i' && !e.metaKey && !e.ctrlKey && e.shiftKey && !e.altKey) {
-        e.preventDefault()
-        const { previewFrame, currentFrame } = usePlaybackStore.getState()
-        useTimelineStore.getState().setInPoint(previewFrame ?? currentFrame)
-      }
-
-      // 'O' key - Set out-point at main playhead
-      if (key === 'o' && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault()
-        const { currentFrame } = usePlaybackStore.getState()
-        useTimelineStore.getState().setOutPoint(currentFrame)
-      }
-
-      // 'Shift+O' key - Set out-point at skimmer playhead when available
-      else if (key === 'o' && !e.metaKey && !e.ctrlKey && e.shiftKey && !e.altKey) {
-        e.preventDefault()
-        const { previewFrame, currentFrame } = usePlaybackStore.getState()
-        useTimelineStore.getState().setOutPoint(previewFrame ?? currentFrame)
-      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -869,8 +841,6 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
         onZoomIn={zoomHandlers?.handleZoomIn}
         onZoomOut={zoomHandlers?.handleZoomOut}
         onZoomToFit={zoomHandlers?.handleZoomToFit}
-        isScopesPanelOpen={colorScopesOpen}
-        onToggleScopesPanel={toggleColorScopesOpen}
       />
 
       {/* Composition Breadcrumbs - shown when inside a sub-composition */}

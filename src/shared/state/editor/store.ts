@@ -5,8 +5,76 @@ import {
   getLeftEditorSidebarBounds,
   getRightEditorSidebarBounds,
 } from '@/config/editor-layout'
+import {
+  normalizeEditorWorkspaceId,
+  normalizeEditorWorkspaceLayout,
+  type EditorWorkspaceId,
+  type EditorWorkspaceLayout,
+} from '@/config/editor-workspaces'
 
 const LEGACY_SIDEBAR_DEFAULT_WIDTH = 320
+const WORKSPACE_STORAGE_KEY = 'editor:workspace'
+
+function workspaceLayoutStorageKey(workspace: EditorWorkspaceId): string {
+  return `editor:workspaceLayout:${workspace}`
+}
+
+function loadEditorWorkspaceId(): EditorWorkspaceId {
+  try {
+    return normalizeEditorWorkspaceId(localStorage.getItem(WORKSPACE_STORAGE_KEY))
+  } catch {
+    return normalizeEditorWorkspaceId(null)
+  }
+}
+
+function loadLegacyPropertiesFullColumn(): boolean {
+  try {
+    return localStorage.getItem('editor:propertiesFullColumn') === 'true'
+  } catch {
+    return false
+  }
+}
+
+/** Saved per-workspace layout (user tweaks), falling back to the workspace preset. */
+function loadEditorWorkspaceLayout(workspace: EditorWorkspaceId): EditorWorkspaceLayout {
+  let stored: unknown = null
+  try {
+    const raw = localStorage.getItem(workspaceLayoutStorageKey(workspace))
+    stored = raw === null ? null : JSON.parse(raw)
+  } catch {
+    stored = null
+  }
+
+  const layout = normalizeEditorWorkspaceLayout(stored, workspace)
+  // The edit workspace inherits the pre-workspaces global preference until
+  // the user has a saved snapshot for it.
+  const hasStoredFullColumn =
+    typeof (stored as { propertiesFullColumn?: unknown } | null)?.propertiesFullColumn === 'boolean'
+  if (workspace === 'edit' && !hasStoredFullColumn) {
+    return { ...layout, propertiesFullColumn: loadLegacyPropertiesFullColumn() }
+  }
+  return layout
+}
+
+function getEditorWorkspaceLayoutSnapshot(state: EditorState): EditorWorkspaceLayout {
+  return {
+    colorScopesOpen: state.colorScopesOpen,
+    clipInspectorTab: state.clipInspectorTab,
+    activeTab: state.activeTab,
+    propertiesFullColumn: state.propertiesFullColumn,
+  }
+}
+
+function saveEditorWorkspaceLayout(workspace: EditorWorkspaceId, layout: EditorWorkspaceLayout): void {
+  try {
+    localStorage.setItem(workspaceLayoutStorageKey(workspace), JSON.stringify(layout))
+  } catch {
+    /* noop */
+  }
+}
+
+const initialWorkspace = loadEditorWorkspaceId()
+const initialWorkspaceLayout = loadEditorWorkspaceLayout(initialWorkspace)
 
 function normalizeSidebarWidth(
   width: number,
@@ -41,8 +109,9 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   rightSidebarOpen: true,
   keyframeEditorOpen: false,
   keyframeEditorShortcutScopeActive: false,
-  activeTab: 'media',
-  clipInspectorTab: 'video',
+  workspace: initialWorkspace,
+  activeTab: initialWorkspaceLayout.activeTab,
+  clipInspectorTab: initialWorkspaceLayout.clipInspectorTab,
   sidebarWidth: loadSidebarWidth('editor:sidebarWidth', EDITOR_LAYOUT.leftSidebarDefaultWidth),
   rightSidebarWidth: loadSidebarWidth(
     'editor:rightSidebarWidth',
@@ -60,7 +129,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   sourcePatchVideoTrackId: null,
   sourcePatchAudioTrackId: null,
   linkedSelectionEnabled: true,
-  colorScopesOpen: false,
+  colorScopesOpen: initialWorkspaceLayout.colorScopesOpen,
   mixerFloating: (() => {
     try {
       return localStorage.getItem('editor:mixerFloating') === 'true'
@@ -68,13 +137,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
       return false
     }
   })(),
-  propertiesFullColumn: (() => {
-    try {
-      return localStorage.getItem('editor:propertiesFullColumn') === 'true'
-    } catch {
-      return false
-    }
-  })(),
+  propertiesFullColumn: initialWorkspaceLayout.propertiesFullColumn,
   mediaFullColumn: (() => {
     try {
       const v = localStorage.getItem('editor:mediaFullColumn')
@@ -109,8 +172,34 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
         leftSidebarOpen: nextOpen ? true : state.leftSidebarOpen,
       }
     }),
-  setActiveTab: (tab) => set({ activeTab: tab }),
-  setClipInspectorTab: (tab) => set({ clipInspectorTab: tab }),
+  setWorkspace: (workspace) =>
+    set((state) => {
+      if (state.workspace === workspace) return state
+
+      // Remember the outgoing workspace's layout so the user's tweaks
+      // survive a round trip; the incoming workspace restores its own
+      // saved layout (or the preset on first visit).
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(state))
+      try {
+        localStorage.setItem(WORKSPACE_STORAGE_KEY, workspace)
+      } catch {
+        /* noop */
+      }
+
+      return { workspace, ...loadEditorWorkspaceLayout(workspace) }
+    }),
+  setActiveTab: (tab) =>
+    set((state) => {
+      const nextState = { ...state, activeTab: tab }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { activeTab: tab }
+    }),
+  setClipInspectorTab: (tab) =>
+    set((state) => {
+      const nextState = { ...state, clipInspectorTab: tab }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { clipInspectorTab: tab }
+    }),
   setSidebarWidth: (width) => {
     try {
       localStorage.setItem('editor:sidebarWidth', String(width))
@@ -237,8 +326,19 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   setLinkedSelectionEnabled: (enabled) => set({ linkedSelectionEnabled: enabled }),
   toggleLinkedSelectionEnabled: () =>
     set((state) => ({ linkedSelectionEnabled: !state.linkedSelectionEnabled })),
-  setColorScopesOpen: (open) => set({ colorScopesOpen: open }),
-  toggleColorScopesOpen: () => set((state) => ({ colorScopesOpen: !state.colorScopesOpen })),
+  setColorScopesOpen: (open) =>
+    set((state) => {
+      const nextState = { ...state, colorScopesOpen: open }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { colorScopesOpen: open }
+    }),
+  toggleColorScopesOpen: () =>
+    set((state) => {
+      const colorScopesOpen = !state.colorScopesOpen
+      const nextState = { ...state, colorScopesOpen }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { colorScopesOpen }
+    }),
   setMixerFloating: (floating) => {
     try {
       localStorage.setItem('editor:mixerFloating', String(floating))
@@ -265,6 +365,8 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
       } catch {
         /* noop */
       }
+      const nextState = { ...state, propertiesFullColumn: next }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
       return { propertiesFullColumn: next }
     }),
   toggleMediaFullColumn: () =>

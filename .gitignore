@@ -38,6 +38,7 @@ coverage
 # Misc
 .cache
 .temp
+.hermes/
 
 *.mp4
 
@@ -82,3 +83,4 @@ tmp-workspace/
 /waveform-bin/
 
 *.lock
+plans/

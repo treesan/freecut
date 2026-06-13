@@ -5,15 +5,15 @@
 
 export {
   createDefaultAdjustmentItem,
+  createScrubThrottleState,
+  shouldCommitScrubFrame,
   createDefaultShapeItem,
-  createDefaultTextItem,
   createTextTemplateItem,
   findCompatibleTrackForItemType,
   findNearestAvailableSpace,
   getDefaultGeneratedLayerDurationInFrames,
   getTrackKind,
   resolveEffectiveTrackStates,
-  areFramesAligned,
   getMaxTransitionDurationForHandles,
   resolveTransitionTargetFromSelection,
   timelineToSourceFrames,

@@ -51,6 +51,16 @@ export function getSharedPreviewAudioContext(): AudioContext | null {
   return sharedPreviewAudioContext
 }
 
+/**
+ * Read the shared context without creating one. For instrumentation that must
+ * not trigger AudioContext construction as a side effect.
+ */
+export function peekSharedPreviewAudioContext(): AudioContext | null {
+  return sharedPreviewAudioContext !== null && sharedPreviewAudioContext.state !== 'closed'
+    ? sharedPreviewAudioContext
+    : null
+}
+
 function createPassNodes(
   context: AudioContext,
   type: 'highpass' | 'lowpass',

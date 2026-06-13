@@ -17,7 +17,7 @@ import {
   clampSpeed,
 } from '../utils/source-calculations'
 import { isCompositionWrapperItem, wouldCreateCompositionCycle } from '../utils/composition-graph'
-import { useCompositionNavigationStore } from './composition-navigation-store'
+import { getActiveCompositionId } from './composition-navigation-active'
 import { useCompositionsStore } from './compositions-store'
 import { useTimelineSettingsStore } from './timeline-settings-store'
 import { useMarkersStore } from './markers-store'
@@ -112,6 +112,7 @@ interface ItemsActions {
   ) => void
   _removeEffect: (itemId: string, effectId: string) => void
   _toggleEffect: (itemId: string, effectId: string) => void
+  _setItemEffects: (updates: Array<{ itemId: string; effects: ItemEffect[] }>) => void
 }
 
 function updateVisualItemEffects(
@@ -301,7 +302,7 @@ export const useItemsStore = create<ItemsState & ItemsActions>()((set, get) => (
     const state = get()
     const itemsMap = new Map(state.items.map((i) => [i.id, i]))
     const newItems: TimelineItem[] = []
-    const activeCompositionId = useCompositionNavigationStore.getState().activeCompositionId
+    const activeCompositionId = getActiveCompositionId()
     const compositionById = useCompositionsStore.getState().compositionById
     const linkedGroupMap = new Map<string, string>()
 
@@ -833,6 +834,27 @@ export const useItemsStore = create<ItemsState & ItemsActions>()((set, get) => (
         ),
       ),
     ),
+
+  // Replace the full effects list on multiple items (reorder, paste grade).
+  // Callers are responsible for preserving ids of retained effects.
+  _setItemEffects: (updates) =>
+    set((state) => {
+      const updateMap = new Map(updates.map((u) => [u.itemId, u.effects]))
+
+      const nextItems = state.items.map((item) => {
+        const nextEffects = updateMap.get(item.id)
+        if (!nextEffects) return item
+        // Audio items don't support visual effects
+        if (item.type === 'audio') return item
+
+        return {
+          ...item,
+          effects: nextEffects,
+        } as typeof item
+      })
+
+      return withItemIndexes(nextItems, state)
+    }),
 }))
 
 let prevItemsRef = useItemsStore.getState().items

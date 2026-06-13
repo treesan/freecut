@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/shared/ui/cn'
 
-export interface ComboboxOption {
+interface ComboboxOption {
   value: string
   label: string
   keywords?: readonly string[]

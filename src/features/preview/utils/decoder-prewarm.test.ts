@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
-import { backgroundPreseek, disposePrewarmWorker } from './decoder-prewarm'
+import {
+  backgroundPreseek,
+  disposePrewarmWorker,
+  warmDecoderPrewarmWorkerPool,
+} from './decoder-prewarm'
 import {
   clearObjectUrlRegistry,
   registerObjectUrl,
@@ -140,5 +144,18 @@ describe('decoder prewarm', () => {
     expect(secondResult).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
     expect(preseekPosts).toHaveLength(0)
+  })
+  it('warmDecoderPrewarmWorkerPool eagerly spawns the pool exactly once', () => {
+    warmDecoderPrewarmWorkerPool()
+
+    expect(createdWorkers.length).toBeGreaterThan(0)
+    for (const worker of createdWorkers) {
+      // Each worker preloads mediabunny WASM on creation.
+      expect(worker.postMessage).toHaveBeenCalledWith({ type: 'warmup' })
+    }
+
+    const spawnedCount = createdWorkers.length
+    warmDecoderPrewarmWorkerPool()
+    expect(createdWorkers.length).toBe(spawnedCount)
   })
 })

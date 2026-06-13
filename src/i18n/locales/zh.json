@@ -36,6 +36,11 @@
   },
   "toolbar": {
     "ariaLabel": "编辑器工具栏",
+    "workspaces": {
+      "label": "工作区",
+      "edit": "剪辑",
+      "color": "调色"
+    },
     "backToProjects": "返回项目",
     "backToProjectsAria": "返回项目",
     "specs": "{{width}}x{{height}} | {{fps}} fps",

@@ -3,12 +3,7 @@
  * the info popover through this contract.
  */
 
-export {
-  useSceneBrowserStore,
-} from '@/features/scene-browser/stores/scene-browser-store'
-export {
-  invalidateMediaCaptionThumbnails,
-} from '@/features/scene-browser/utils/invalidate'
+export { useSceneBrowserStore } from '@/features/scene-browser/stores/scene-browser-store'
 
 export const importSceneBrowserPanel = () =>
   import('@/features/scene-browser/components/scene-browser-panel')

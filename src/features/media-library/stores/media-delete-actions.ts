@@ -1,8 +1,9 @@
 import type { MediaLibraryState, MediaLibraryActions } from '../types'
-import { importMediaLibraryService } from '../services/media-library-service-loader'
+import type { MediaMetadata } from '@/types/storage'
+import { loadMediaLibraryService } from './media-library-service-access'
 import { proxyService } from '../services/proxy-service'
 import { blobUrlManager } from '@/infrastructure/browser/blob-url-manager'
-import { invalidateMediaCaptionThumbnails } from '../deps/scene-browser'
+import { invalidateMediaCaptionCaches } from '../services/media-caption-cache-events'
 import { useMediaPreparationStore } from './media-preparation-store'
 
 type Set = (
@@ -19,7 +20,16 @@ function applyOptimisticDelete(set: Set, ids: string[]): void {
   }))
 }
 
-function releaseDeletedMediaResources(ids: string[]): void {
+function getCaptionThumbRelPaths(media: MediaMetadata | undefined): Array<string | undefined> {
+  return media?.aiCaptions?.map((caption) => caption.thumbRelPath) ?? []
+}
+
+function releaseDeletedMediaResources(
+  ids: string[],
+  previousItems: readonly MediaMetadata[],
+): void {
+  const previousMediaById = new Map(previousItems.map((item) => [item.id, item]))
+
   for (const id of ids) {
     blobUrlManager.release(id)
     proxyService.clearProxyKey(id)
@@ -27,7 +37,7 @@ function releaseDeletedMediaResources(ids: string[]): void {
     // URLs (which otherwise pin the JPEG in memory forever), lazy-thumb
     // result memos, and both text + image embedding maps. Disk-side
     // cleanup is already handled by the recursive `media/{id}/` removal.
-    invalidateMediaCaptionThumbnails(id)
+    invalidateMediaCaptionCaches(id, getCaptionThumbRelPaths(previousMediaById.get(id)))
     useMediaPreparationStore.getState().clearMedia(id)
   }
 }
@@ -49,7 +59,7 @@ export function createDeleteActions(
 
     try {
       await deleteOperation()
-      releaseDeletedMediaResources(ids)
+      releaseDeletedMediaResources(ids, previousItems)
     } catch (error) {
       set({
         mediaItems: previousItems,
@@ -67,7 +77,7 @@ export function createDeleteActions(
       await deleteMediaInternal(
         [id],
         async () => {
-          const { mediaLibraryService } = await importMediaLibraryService()
+          const { mediaLibraryService } = await loadMediaLibraryService()
           return currentProjectId
             ? mediaLibraryService.deleteMediaFromProject(currentProjectId, id)
             : mediaLibraryService.deleteMedia(id)
@@ -82,7 +92,7 @@ export function createDeleteActions(
       await deleteMediaInternal(
         ids,
         async () => {
-          const { mediaLibraryService } = await importMediaLibraryService()
+          const { mediaLibraryService } = await loadMediaLibraryService()
           return currentProjectId
             ? mediaLibraryService.deleteMediaBatchFromProject(currentProjectId, ids)
             : mediaLibraryService.deleteMediaBatch(ids)

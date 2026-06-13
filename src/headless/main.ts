@@ -40,13 +40,16 @@ import {
 import type { ClientVideoContainer } from '@/features/export/utils/client-renderer'
 import { resolveMediaUrls } from '@/features/media-library/utils/media-resolver'
 import { blobUrlManager } from '@/infrastructure/browser/blob-url-manager'
-import { useCompositionsStore, type SubComposition } from '@/features/export/deps/timeline'
+import {
+  useCompositionsStore,
+  type SubComposition,
+} from '@/features/export/deps/timeline-compositions'
 import { editProject } from './edit'
 import { seedMediaLibrary } from './seed-media'
 
 const log = createLogger('Headless')
 
-export interface HeadlessMediaSource {
+interface HeadlessMediaSource {
   mediaId: string
   /** Same-origin (or CORS+CORP) URL the harness can fetch the full media bytes from. */
   url: string
@@ -59,7 +62,7 @@ export interface HeadlessMediaSource {
 }
 
 /** Render from already-extracted timeline data (no Project schema required). */
-export interface HeadlessTimelineInput {
+interface HeadlessTimelineInput {
   tracks: TimelineTrack[]
   items: TimelineItem[]
   transitions?: Transition[]
@@ -79,7 +82,7 @@ export interface HeadlessTimelineInput {
 }
 
 /** Render a full Project object (runs migrations, then extracts the timeline). */
-export interface HeadlessProjectInput {
+interface HeadlessProjectInput {
   project: Project
   settings: ClientExportSettings
   media?: HeadlessMediaSource[]
@@ -95,7 +98,7 @@ export interface HeadlessProjectInput {
   outputFileName?: string
 }
 
-export interface HeadlessRenderSummary {
+interface HeadlessRenderSummary {
   ok: true
   mimeType: string
   fileSize: number
@@ -395,7 +398,7 @@ async function renderProject(input: HeadlessProjectInput): Promise<HeadlessRende
   })
 }
 
-export interface FreecutHeadlessApi {
+interface FreecutHeadlessApi {
   ready: true
   renderTimeline: typeof renderTimeline
   renderProject: typeof renderProject

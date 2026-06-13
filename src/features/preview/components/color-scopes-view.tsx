@@ -3,8 +3,15 @@ import { Activity } from 'lucide-react'
 import { getResolvedPlaybackFrame, usePlaybackStore } from '@/shared/state/playback'
 import { usePreviewBridgeStore } from '@/shared/state/preview-bridge'
 import { cn } from '@/shared/ui/cn'
-import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ScopeRenderer } from '@/infrastructure/gpu-scopes'
+import { ScopeCanvasFrame } from './color-scope-overlays'
 
 const SAMPLE_WIDTH_PAUSED = 384
 const SAMPLE_HEIGHT_PAUSED = 216
@@ -12,14 +19,36 @@ const SAMPLE_WIDTH_PLAYING = 256
 const SAMPLE_HEIGHT_PLAYING = 144
 const GPU_INTERVAL = 66 // ~15fps
 const CPU_INTERVAL = 220
-const COLOR_MATRIX_STORAGE_KEY = 'timeline:scopes:colorMatrix'
-const RANGE_MODE_STORAGE_KEY = 'timeline:scopes:rangeMode'
 const STACK_LAYOUT_STORAGE_KEY = 'timeline:scopes:stackLayout'
+// Resolve-style RGB parade: three roughly square waveform lanes side by side.
+const PARADE_SCOPE_ASPECT_RATIO = 10 / 3
+
+interface GpuCanvasContextCacheEntry {
+  ctx: GPUCanvasContext
+  width: number
+  height: number
+}
 
 type ScopeColorMatrix = 'bt709' | 'bt601'
 type ScopeRangeMode = 'full' | 'legal'
+
+// Browser compositing is effectively sRGB/Rec.709 full-range, so the scopes
+// use fixed coefficients — like DaVinci, no matrix/range toggles in the
+// toolbar (Resolve keeps such options behind its scope settings menu).
+const SCOPE_COLOR_MATRIX: ScopeColorMatrix = 'bt709'
+const SCOPE_RANGE_MODE: ScopeRangeMode = 'full'
 type ScopeViewMode = 'rgb' | 'r' | 'g' | 'b' | 'luma'
-type StackScopeLayout = 'three-up' | 'all'
+// DaVinci-style scope picker: one scope at a time by default, 'all' opts
+// into the stacked view. Only the visible scopes mount and render.
+type StackScopeView = 'waveform' | 'parade' | 'vectorscope' | 'histogram' | 'all'
+
+const STACK_SCOPE_VIEWS: ReadonlyArray<{ value: StackScopeView; label: string }> = [
+  { value: 'waveform', label: 'Waveform' },
+  { value: 'parade', label: 'Parade' },
+  { value: 'vectorscope', label: 'Vectorscope' },
+  { value: 'histogram', label: 'Histogram' },
+  { value: 'all', label: 'All' },
+]
 
 const VIEW_MODE_NUM: Record<ScopeViewMode, number> = { rgb: 0, r: 1, g: 2, b: 3, luma: 4 }
 
@@ -32,34 +61,14 @@ function getMatrixCoefficients(matrix: ScopeColorMatrix): MatrixCoefficients {
   return matrix === 'bt601' ? { kr: 0.299, kb: 0.114 } : { kr: 0.2126, kb: 0.0722 }
 }
 
-function loadColorMatrix(): ScopeColorMatrix {
-  try {
-    const v = localStorage.getItem(COLOR_MATRIX_STORAGE_KEY)
-    if (v === 'bt601' || v === 'bt709') return v
-  } catch {
-    /* ignore */
-  }
-  return 'bt709'
-}
-
-function loadRangeMode(): ScopeRangeMode {
-  try {
-    const v = localStorage.getItem(RANGE_MODE_STORAGE_KEY)
-    if (v === 'full' || v === 'legal') return v
-  } catch {
-    /* ignore */
-  }
-  return 'full'
-}
-
-function loadStackLayout(): StackScopeLayout {
+function loadStackView(): StackScopeView {
   try {
     const v = localStorage.getItem(STACK_LAYOUT_STORAGE_KEY)
-    if (v === 'three-up' || v === 'all') return v
+    if (STACK_SCOPE_VIEWS.some((view) => view.value === v)) return v as StackScopeView
   } catch {
     /* ignore */
   }
-  return 'three-up'
+  return 'parade'
 }
 
 // ── CPU fallback drawing functions ──────────────────────────────────────────
@@ -359,6 +368,7 @@ function ScopeModeBar({
               : undefined
           }
           onClick={() => onChange(m.value)}
+          aria-pressed={mode === m.value}
         >
           {m.label}
         </button>
@@ -380,10 +390,9 @@ function useGpuCanvasResize(
     const container = containerRef.current
     const canvas = canvasRef.current
     if (!container || !canvas) return
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (!entry) return
-      const { width, height } = entry.contentRect
+
+    const resizeCanvas = (width: number, height: number) => {
+      if (width <= 0 || height <= 0) return
       const dpr = window.devicePixelRatio || 1
       let w = width
       let h = height
@@ -404,9 +413,24 @@ function useGpuCanvasResize(
         canvas.style.width = `${Math.round(w)}px`
         canvas.style.height = `${Math.round(h)}px`
       }
+    }
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      resizeCanvas(entry.contentRect.width, entry.contentRect.height)
     })
     ro.observe(container)
-    return () => ro.disconnect()
+
+    resizeCanvas(container.clientWidth, container.clientHeight)
+    const rafId = requestAnimationFrame(() => {
+      resizeCanvas(container.clientWidth, container.clientHeight)
+    })
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      ro.disconnect()
+    }
   }, [aspectRatio, canvasRef, containerRef, enabled])
 }
 
@@ -423,19 +447,22 @@ export const ColorScopesView = memo(function ColorScopesView({
   embedded = false,
   embeddedLayout = 'grid',
 }: ColorScopesViewProps) {
-  const [colorMatrix, setColorMatrix] = useState<ScopeColorMatrix>(() => loadColorMatrix())
-  const [rangeMode, setRangeMode] = useState<ScopeRangeMode>(() => loadRangeMode())
   const [status, setStatus] = useState<'idle' | 'live' | 'error'>('idle')
   const [gpuReady, setGpuReady] = useState<boolean | null>(null) // null = pending
   const [waveformMode, setWaveformMode] = useState<ScopeViewMode>('luma')
   const [histogramMode, setHistogramMode] = useState<ScopeViewMode>('rgb')
-  const [stackLayout, setStackLayout] = useState<StackScopeLayout>(() => loadStackLayout())
+  const [stackView, setStackView] = useState<StackScopeView>(() => loadStackView())
 
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
   const captureFrameImageData = usePreviewBridgeStore((s) => s.captureFrameImageData)
   const captureFrame = usePreviewBridgeStore((s) => s.captureFrame)
   const isEmbeddedStackLayout = embedded && embeddedLayout === 'stack'
-  const showHistogram = embedded && (!isEmbeddedStackLayout || stackLayout === 'all')
+  const stackShows = (scope: StackScopeView) =>
+    !isEmbeddedStackLayout || stackView === scope || stackView === 'all'
+  const showWaveform = stackShows('waveform')
+  const showParade = embedded && stackShows('parade')
+  const showVectorscope = stackShows('vectorscope')
+  const showHistogram = embedded && stackShows('histogram')
 
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null)
   const paradeCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -447,7 +474,7 @@ export const ColorScopesView = memo(function ColorScopesView({
   const histogramContainerRef = useRef<HTMLDivElement>(null)
 
   const rendererRef = useRef<ScopeRenderer | null>(null)
-  const gpuCtxCacheRef = useRef(new Map<HTMLCanvasElement, GPUCanvasContext>())
+  const gpuCtxCacheRef = useRef(new Map<HTMLCanvasElement, GpuCanvasContextCacheEntry>())
   const gpuInitedRef = useRef(false)
   const gpuRenderInFlightRef = useRef(false)
   const cpuDrawInFlightRef = useRef(false)
@@ -456,16 +483,8 @@ export const ColorScopesView = memo(function ColorScopesView({
   const liveTickRef = useRef(0)
 
   // Refs for values read inside RAF loop (avoid restarting loop on every change)
-  const colorMatrixRef = useRef(colorMatrix)
-  colorMatrixRef.current = colorMatrix
-  const rangeModeRef = useRef(rangeMode)
-  rangeModeRef.current = rangeMode
   const isPlayingRef = useRef(isPlaying)
   isPlayingRef.current = isPlaying
-  const embeddedRef = useRef(embedded)
-  embeddedRef.current = embedded
-  const showHistogramRef = useRef(showHistogram)
-  showHistogramRef.current = showHistogram
   const waveformModeRef = useRef(waveformMode)
   waveformModeRef.current = waveformMode
   const histogramModeRef = useRef(histogramMode)
@@ -474,31 +493,24 @@ export const ColorScopesView = memo(function ColorScopesView({
   // Persist settings
   useEffect(() => {
     try {
-      localStorage.setItem(COLOR_MATRIX_STORAGE_KEY, colorMatrix)
+      localStorage.setItem(STACK_LAYOUT_STORAGE_KEY, stackView)
     } catch {
       /* ignore */
     }
-  }, [colorMatrix])
-  useEffect(() => {
-    try {
-      localStorage.setItem(RANGE_MODE_STORAGE_KEY, rangeMode)
-    } catch {
-      /* ignore */
-    }
-  }, [rangeMode])
-  useEffect(() => {
-    try {
-      localStorage.setItem(STACK_LAYOUT_STORAGE_KEY, stackLayout)
-    } catch {
-      /* ignore */
-    }
-  }, [stackLayout])
+  }, [stackView])
 
-  // DPR-aware sizing for GPU canvases
-  useGpuCanvasResize(waveformCanvasRef, waveformContainerRef)
-  useGpuCanvasResize(paradeCanvasRef, paradeContainerRef)
+  // DPR-aware sizing for GPU canvases. The enabled flags double as remount
+  // triggers: switching the stack scope picker unmounts/remounts sections,
+  // and the effect must re-observe the fresh container element.
+  useGpuCanvasResize(waveformCanvasRef, waveformContainerRef, undefined, showWaveform)
+  useGpuCanvasResize(
+    paradeCanvasRef,
+    paradeContainerRef,
+    PARADE_SCOPE_ASPECT_RATIO,
+    showParade,
+  )
   useGpuCanvasResize(histogramCanvasRef, histogramContainerRef, undefined, showHistogram)
-  useGpuCanvasResize(vectorscopeCanvasRef, vectorscopeContainerRef, 1)
+  useGpuCanvasResize(vectorscopeCanvasRef, vectorscopeContainerRef, 1, showVectorscope)
 
   // ── GPU initialization ──────────────────────────────────────────────────
 
@@ -531,10 +543,23 @@ export const ColorScopesView = memo(function ColorScopesView({
     const renderer = rendererRef.current
     if (!renderer) return null
     const cache = gpuCtxCacheRef.current
-    let ctx = cache.get(canvas)
-    if (ctx) return ctx
-    ctx = renderer.configureCanvas(canvas) ?? undefined
-    if (ctx) cache.set(canvas, ctx)
+    const cached = cache.get(canvas)
+    if (cached && cached.width === canvas.width && cached.height === canvas.height) {
+      return cached.ctx
+    }
+    // Scope switching unmounts canvases — drop their cached contexts so the
+    // map doesn't pin detached elements forever.
+    for (const cached of cache.keys()) {
+      if (!cached.isConnected) cache.delete(cached)
+    }
+    const ctx = renderer.configureCanvas(canvas) ?? undefined
+    if (ctx) {
+      cache.set(canvas, {
+        ctx,
+        width: canvas.width,
+        height: canvas.height,
+      })
+    }
     return ctx ?? null
   }, [])
 
@@ -557,17 +582,22 @@ export const ColorScopesView = memo(function ColorScopesView({
 
     const renderGpuFrame = async () => {
       if (gpuRenderInFlightRef.current) return
+      // Scrub/hover preview frames are latency-sensitive. Let the program
+      // monitor own those transient frames, then scopes catch up on release.
+      if (usePlaybackStore.getState().previewFrame !== null) return
       gpuRenderInFlightRef.current = true
-      const { kr, kb } = getMatrixCoefficients(colorMatrixRef.current)
-      const [rangeMin, rangeMax] = rangeModeRef.current === 'legal' ? [16 / 255, 235 / 255] : [0, 1]
+      const { kr, kb } = getMatrixCoefficients(SCOPE_COLOR_MATRIX)
       renderer.setMatrix(kr, kb)
-      renderer.setRange(rangeMin, rangeMax)
+      renderer.setRange(0, 1)
 
       try {
         // Try near-zero-copy canvas path first
         const canvasSourceFn = usePreviewBridgeStore.getState().captureCanvasSource
         if (canvasSourceFn) {
-          const source = await canvasSourceFn()
+          const source = await canvasSourceFn({
+            fresh: isPlayingRef.current,
+            preferRenderedFrame: true,
+          })
           if (source && !cancelled) {
             renderer.uploadFromCanvas(source)
           } else if (!cancelled) {
@@ -580,24 +610,22 @@ export const ColorScopesView = memo(function ColorScopesView({
 
         if (cancelled) return
 
-        // Render each visible scope
+        // Render each visible scope — hidden scopes have no mounted canvas,
+        // so getGpuCtx returns null and they cost nothing.
         const wfCtx = getGpuCtx(waveformCanvasRef.current)
         const waveformRequests: Array<{ ctx: GPUCanvasContext; mode: number }> = []
         if (wfCtx) {
           waveformRequests.push({ ctx: wfCtx, mode: VIEW_MODE_NUM[waveformModeRef.current] })
         }
 
-        if (embeddedRef.current) {
-          const parCtx = getGpuCtx(paradeCanvasRef.current)
-          if (parCtx) {
-            waveformRequests.push({ ctx: parCtx, mode: 5 }) // parade mode
-          }
-
-          if (showHistogramRef.current) {
-            const histCtx = getGpuCtx(histogramCanvasRef.current)
-            if (histCtx) renderer.renderHistogram(histCtx, VIEW_MODE_NUM[histogramModeRef.current])
-          }
+        const parCtx = getGpuCtx(paradeCanvasRef.current)
+        if (parCtx) {
+          waveformRequests.push({ ctx: parCtx, mode: 5 }) // parade mode
         }
+
+        const histCtx = getGpuCtx(histogramCanvasRef.current)
+        if (histCtx) renderer.renderHistogram(histCtx, VIEW_MODE_NUM[histogramModeRef.current])
+
         if (waveformRequests.length > 0) {
           renderer.renderWaveforms(waveformRequests)
         }
@@ -618,7 +646,12 @@ export const ColorScopesView = memo(function ColorScopesView({
       if (!captureFn) return
       const sampleW = isPlayingRef.current ? SAMPLE_WIDTH_PLAYING : SAMPLE_WIDTH_PAUSED
       const sampleH = isPlayingRef.current ? SAMPLE_HEIGHT_PLAYING : SAMPLE_HEIGHT_PAUSED
-      const imageData = await captureFn({ width: sampleW, height: sampleH })
+      const imageData = await captureFn({
+        width: sampleW,
+        height: sampleH,
+        fresh: isPlayingRef.current,
+        preferRenderedFrame: true,
+      })
       if (imageData) r.uploadFrame(imageData)
     }
 
@@ -648,29 +681,34 @@ export const ColorScopesView = memo(function ColorScopesView({
       }
       const requestedFrame = getRequestedFrame()
 
+      // Hidden scopes have no mounted canvas — draw whichever are present.
       const wfCanvas = waveformCanvasRef.current
       const vsCanvas = vectorscopeCanvasRef.current
-      if (!wfCanvas || !vsCanvas) return
+      if (!wfCanvas && !vsCanvas && !paradeCanvasRef.current && !histogramCanvasRef.current) {
+        return
+      }
 
-      const wfSize = ensureCanvasSize(wfCanvas, 512, 256, 1920, 1080)
+      const wfSize = wfCanvas ? ensureCanvasSize(wfCanvas, 512, 256, 1920, 1080) : null
       const parSize = paradeCanvasRef.current
         ? ensureCanvasSize(paradeCanvasRef.current, 512, 256, 1920, 1080)
         : null
       const histSize = histogramCanvasRef.current
         ? ensureCanvasSize(histogramCanvasRef.current, 512, 256, 1920, 1080)
         : null
-      const vsRect = ensureCanvasSize(vsCanvas, 256, 256, 1024, 1024)
-      const vsSize = Math.max(2, Math.min(vsRect.width, vsRect.height))
-      if (vsCanvas.width !== vsSize || vsCanvas.height !== vsSize) {
-        vsCanvas.width = vsSize
-        vsCanvas.height = vsSize
+      let vsSize = 0
+      if (vsCanvas) {
+        const vsRect = ensureCanvasSize(vsCanvas, 256, 256, 1024, 1024)
+        vsSize = Math.max(2, Math.min(vsRect.width, vsRect.height))
+        if (vsCanvas.width !== vsSize || vsCanvas.height !== vsSize) {
+          vsCanvas.width = vsSize
+          vsCanvas.height = vsSize
+        }
       }
 
-      const wfCtx = wfCanvas.getContext('2d')
+      const wfCtx = wfCanvas?.getContext('2d') ?? null
       const parCtx = paradeCanvasRef.current?.getContext('2d') ?? null
-      const vsCtx = vsCanvas.getContext('2d')
+      const vsCtx = vsCanvas?.getContext('2d') ?? null
       const histCtx = histogramCanvasRef.current?.getContext('2d') ?? null
-      if (!wfCtx || !vsCtx) return
 
       try {
         const sampleW = isPlaying ? SAMPLE_WIDTH_PLAYING : SAMPLE_WIDTH_PAUSED
@@ -678,7 +716,12 @@ export const ColorScopesView = memo(function ColorScopesView({
         let imageData: ImageData | null = null
 
         if (captureFrameImageData) {
-          imageData = await captureFrameImageData({ width: sampleW, height: sampleH })
+          imageData = await captureFrameImageData({
+            width: sampleW,
+            height: sampleH,
+            fresh: isPlaying,
+            preferRenderedFrame: true,
+          })
         }
 
         if (!imageData && captureFrame) {
@@ -687,6 +730,8 @@ export const ColorScopesView = memo(function ColorScopesView({
             height: sampleH,
             format: 'image/jpeg',
             quality: isPlaying ? 0.72 : 0.85,
+            fresh: isPlaying,
+            preferRenderedFrame: true,
           })
           if (dataUrl) {
             const img = new Image()
@@ -718,19 +763,30 @@ export const ColorScopesView = memo(function ColorScopesView({
           return
         }
 
-        cpuDrawWaveform(imageData, wfCtx, colorMatrix, rangeMode, wfSize.width, wfSize.height)
+        if (wfCtx && wfSize) {
+          cpuDrawWaveform(
+            imageData,
+            wfCtx,
+            SCOPE_COLOR_MATRIX,
+            SCOPE_RANGE_MODE,
+            wfSize.width,
+            wfSize.height,
+          )
+        }
         const drawHeavy = !isPlaying || liveTickRef.current % 2 === 0
         liveTickRef.current += 1
-        if (embedded && parCtx && parSize && drawHeavy) {
-          cpuDrawParade(imageData, parCtx, rangeMode, parSize.width, parSize.height)
+        if (parCtx && parSize && drawHeavy) {
+          cpuDrawParade(imageData, parCtx, SCOPE_RANGE_MODE, parSize.width, parSize.height)
         }
-        cpuDrawVectorscope(imageData, vsCtx, colorMatrix, vsSize)
-        if (showHistogram && histCtx && histSize && drawHeavy) {
+        if (vsCtx && vsSize > 0) {
+          cpuDrawVectorscope(imageData, vsCtx, SCOPE_COLOR_MATRIX, vsSize)
+        }
+        if (histCtx && histSize && drawHeavy) {
           cpuDrawHistogram(
             imageData,
             histCtx,
-            colorMatrix,
-            rangeMode,
+            SCOPE_COLOR_MATRIX,
+            SCOPE_RANGE_MODE,
             histSize.width,
             histSize.height,
           )
@@ -740,17 +796,7 @@ export const ColorScopesView = memo(function ColorScopesView({
         setStatus('error')
       }
     },
-    [
-      captureFrameImageData,
-      captureFrame,
-      open,
-      gpuReady,
-      colorMatrix,
-      rangeMode,
-      embedded,
-      isPlaying,
-      showHistogram,
-    ],
+    [captureFrameImageData, captureFrame, open, gpuReady, isPlaying],
   )
 
   const runSerializedCpuDraw = useCallback(async () => {
@@ -769,6 +815,21 @@ export const ColorScopesView = memo(function ColorScopesView({
       cpuDrawInFlightRef.current = false
     }
   }, [cpuDraw])
+
+  // CPU: freshly mounted scope canvases are blank until the next frame
+  // change — paint them as soon as the picker swaps the visible scope.
+  useEffect(() => {
+    if (gpuReady !== false || !open) return
+    void runSerializedCpuDraw()
+  }, [
+    gpuReady,
+    open,
+    showWaveform,
+    showParade,
+    showVectorscope,
+    showHistogram,
+    runSerializedCpuDraw,
+  ])
 
   // CPU: update on frame change when paused
   useEffect(() => {
@@ -795,6 +856,13 @@ export const ColorScopesView = memo(function ColorScopesView({
       if (state.isPlaying) {
         return
       }
+      if (state.previewFrame !== null) {
+        return
+      }
+      if (previousState.previewFrame !== null) {
+        scheduleDraw()
+        return
+      }
 
       const nextRequestedFrame = getResolvedPlaybackFrame({
         currentFrame: state.currentFrame,
@@ -819,7 +887,7 @@ export const ColorScopesView = memo(function ColorScopesView({
     const unsubscribePreviewBridge = usePreviewBridgeStore.subscribe(
       (bridgeState, previousBridgeState) => {
         const playbackState = usePlaybackStore.getState()
-        if (playbackState.isPlaying) {
+        if (playbackState.isPlaying || playbackState.previewFrame !== null) {
           return
         }
 
@@ -882,133 +950,118 @@ export const ColorScopesView = memo(function ColorScopesView({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Scopes</div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant={colorMatrix === 'bt709' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-5 px-1.5 text-[10px]"
-              onClick={() => setColorMatrix('bt709')}
-            >
-              709
-            </Button>
-            <Button
-              variant={colorMatrix === 'bt601' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-5 px-1.5 text-[10px]"
-              onClick={() => setColorMatrix('bt601')}
-            >
-              601
-            </Button>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant={rangeMode === 'full' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-5 px-1.5 text-[10px]"
-              onClick={() => setRangeMode('full')}
-            >
-              Full
-            </Button>
-            <Button
-              variant={rangeMode === 'legal' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-5 px-1.5 text-[10px]"
-              onClick={() => setRangeMode('legal')}
-            >
-              Legal
-            </Button>
-          </div>
           {isEmbeddedStackLayout && (
-            <div className="flex items-center gap-1">
-              <Button
-                variant={stackLayout === 'three-up' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-5 px-1.5 text-[10px]"
-                onClick={() => setStackLayout('three-up')}
+            <Select
+              value={stackView}
+              onValueChange={(value) => setStackView(value as StackScopeView)}
+            >
+              <SelectTrigger
+                aria-label="Scope"
+                className="h-5 w-[104px] gap-1 rounded border-border/70 px-1.5 py-0 text-[10px]"
               >
-                3-Up
-              </Button>
-              <Button
-                variant={stackLayout === 'all' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-5 px-1.5 text-[10px]"
-                onClick={() => setStackLayout('all')}
-              >
-                All
-              </Button>
-            </div>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STACK_SCOPE_VIEWS.map((view) => (
+                  <SelectItem key={view.value} value={view.value} className="text-xs">
+                    {view.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <Activity
             className={`w-3 h-3 ${status === 'live' ? 'text-emerald-500' : status === 'error' ? 'text-red-500' : ''}`}
           />
-          {status === 'live'
-            ? `${gpuReady ? 'gpu' : 'cpu'} ${colorMatrix === 'bt709' ? '709' : '601'} ${rangeMode}`
-            : status === 'error'
-              ? 'err'
-              : 'idle'}
+          {status === 'live' ? (gpuReady ? 'gpu' : 'cpu') : status === 'error' ? 'err' : 'idle'}
         </div>
       </div>
       {embedded ? (
         embeddedLayout === 'stack' ? (
-          <div className="h-[calc(100%-22px)] min-h-0 flex flex-col gap-3">
-            <div className="flex min-h-0 flex-[1.02] flex-col">
-              <div className="mb-1 flex items-center justify-between">
-                <div className="text-[10px] text-muted-foreground">Waveform</div>
-                {gpuReady && <ScopeModeBar mode={waveformMode} onChange={setWaveformMode} />}
-              </div>
+          <div className="h-[calc(100%-22px)] min-h-0 flex flex-col gap-2">
+            {showWaveform && (
               <div
-                ref={waveformContainerRef}
-                className="flex-1 min-h-[96px] rounded border border-border/70 bg-black/80"
-              >
-                <canvas ref={waveformCanvasRef} className="w-full h-full" />
-              </div>
-            </div>
-
-            <div className="flex min-h-0 flex-[1.08] flex-col">
-              <div className="text-[10px] mb-1 text-muted-foreground">RGB Parade</div>
-              <div
-                ref={paradeContainerRef}
-                className="flex-1 min-h-[104px] rounded border border-border/70 bg-black/80"
-              >
-                <canvas ref={paradeCanvasRef} className="w-full h-full" />
-              </div>
-            </div>
-
-            <div
-              className={cn(
-                'flex min-h-0 min-w-0 flex-col',
-                showHistogram ? 'flex-[0.9]' : 'flex-[1.02]',
-              )}
-            >
-              <div className="text-[10px] mb-1 text-muted-foreground">Vectorscope</div>
-              <div
-                ref={vectorscopeContainerRef}
                 className={cn(
-                  'mx-auto flex min-h-0 min-w-0 w-full flex-1 items-center justify-center overflow-hidden rounded border border-border/70 bg-black/80',
-                  showHistogram ? 'max-w-[272px]' : 'max-w-[320px]',
+                  'flex min-h-0 flex-col',
+                  stackView === 'all' ? 'flex-[1.02]' : 'flex-1',
                 )}
               >
-                <canvas
-                  ref={vectorscopeCanvasRef}
-                  className="max-w-full max-h-full aspect-square"
-                />
+                <div className="mb-1 flex items-center justify-between">
+                  <div className="text-[10px] text-muted-foreground">Waveform</div>
+                  {gpuReady && <ScopeModeBar mode={waveformMode} onChange={setWaveformMode} />}
+                </div>
+                <ScopeCanvasFrame
+                  containerRef={waveformContainerRef}
+                  kind="waveform"
+                  className="min-h-0 flex-1"
+                >
+                  <canvas ref={waveformCanvasRef} className="w-full h-full" />
+                </ScopeCanvasFrame>
               </div>
-            </div>
+            )}
+
+            {showParade && (
+              <div
+                className={cn(
+                  'flex min-h-0 flex-col',
+                  stackView === 'all' ? 'flex-[1.08]' : 'flex-1',
+                )}
+              >
+                <div className="text-[10px] mb-1 text-muted-foreground">RGB Parade</div>
+                <ScopeCanvasFrame
+                  containerRef={paradeContainerRef}
+                  kind="parade"
+                  className="min-h-0 w-full aspect-[10/3]"
+                >
+                  <canvas ref={paradeCanvasRef} className="w-full h-full" />
+                </ScopeCanvasFrame>
+              </div>
+            )}
+
+            {showVectorscope && (
+              <div
+                className={cn(
+                  'flex min-h-0 min-w-0 flex-col',
+                  stackView === 'all' ? 'flex-[0.9]' : 'flex-1',
+                )}
+              >
+                <div className="text-[10px] mb-1 text-muted-foreground">Vectorscope</div>
+                <ScopeCanvasFrame
+                  containerRef={vectorscopeContainerRef}
+                  kind="vectorscope"
+                  className={cn(
+                    'mx-auto flex min-h-0 min-w-0 w-full flex-1 items-center justify-center',
+                    stackView === 'all' ? 'max-w-[272px]' : 'max-w-[420px]',
+                  )}
+                >
+                  <canvas
+                    ref={vectorscopeCanvasRef}
+                    className="max-w-full max-h-full aspect-square"
+                  />
+                </ScopeCanvasFrame>
+              </div>
+            )}
 
             {showHistogram && (
-              <div className="flex min-h-0 flex-[0.88] flex-col">
+              <div
+                className={cn(
+                  'flex min-h-0 flex-col',
+                  stackView === 'all' ? 'flex-[0.88]' : 'flex-1',
+                )}
+              >
                 <div className="mb-1 flex items-center justify-between">
                   <div className="text-[10px] text-muted-foreground">Histogram</div>
                   {gpuReady && <ScopeModeBar mode={histogramMode} onChange={setHistogramMode} />}
                 </div>
-                <div
-                  ref={histogramContainerRef}
-                  className="flex-1 min-h-[88px] rounded border border-border/70 bg-black/80"
+                <ScopeCanvasFrame
+                  containerRef={histogramContainerRef}
+                  kind="histogram"
+                  className="min-h-0 flex-1"
                 >
                   <canvas ref={histogramCanvasRef} className="w-full h-full" />
-                </div>
+                </ScopeCanvasFrame>
               </div>
             )}
           </div>
@@ -1020,46 +1073,50 @@ export const ColorScopesView = memo(function ColorScopesView({
                   <div className="text-[10px] text-muted-foreground">Waveform</div>
                   {gpuReady && <ScopeModeBar mode={waveformMode} onChange={setWaveformMode} />}
                 </div>
-                <div
-                  ref={waveformContainerRef}
-                  className="flex-1 min-h-[160px] rounded border border-border/70 bg-black/80"
+                <ScopeCanvasFrame
+                  containerRef={waveformContainerRef}
+                  kind="waveform"
+                  className="flex-1 min-h-[160px]"
                 >
                   <canvas ref={waveformCanvasRef} className="w-full h-full" />
-                </div>
+                </ScopeCanvasFrame>
               </div>
               <div className="flex min-h-0 flex-col">
                 <div className="text-[10px] mb-1 text-muted-foreground">RGB Parade</div>
-                <div
-                  ref={paradeContainerRef}
-                  className="flex-1 min-h-[160px] rounded border border-border/70 bg-black/80"
+                <ScopeCanvasFrame
+                  containerRef={paradeContainerRef}
+                  kind="parade"
+                  className="w-full aspect-[10/3]"
                 >
                   <canvas ref={paradeCanvasRef} className="w-full h-full" />
-                </div>
+                </ScopeCanvasFrame>
               </div>
               <div className="col-span-2 flex min-h-0 flex-col">
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-[10px] text-muted-foreground">Histogram</div>
                   {gpuReady && <ScopeModeBar mode={histogramMode} onChange={setHistogramMode} />}
                 </div>
-                <div
-                  ref={histogramContainerRef}
-                  className="flex-1 min-h-[160px] rounded border border-border/70 bg-black/80"
+                <ScopeCanvasFrame
+                  containerRef={histogramContainerRef}
+                  kind="histogram"
+                  className="flex-1 min-h-[160px]"
                 >
                   <canvas ref={histogramCanvasRef} className="w-full h-full" />
-                </div>
+                </ScopeCanvasFrame>
               </div>
             </div>
             <div className="basis-[32%] min-w-[220px] max-w-[380px] flex min-h-0 flex-col">
               <div className="text-[10px] mb-1 text-muted-foreground">Vectorscope</div>
-              <div
-                ref={vectorscopeContainerRef}
-                className="flex flex-1 min-h-0 items-center justify-center rounded border border-border/70 bg-black/80"
+              <ScopeCanvasFrame
+                containerRef={vectorscopeContainerRef}
+                kind="vectorscope"
+                className="flex flex-1 min-h-0 items-center justify-center"
               >
                 <canvas
                   ref={vectorscopeCanvasRef}
                   className="max-w-full max-h-full aspect-square"
                 />
-              </div>
+              </ScopeCanvasFrame>
             </div>
           </div>
         )
@@ -1070,21 +1127,23 @@ export const ColorScopesView = memo(function ColorScopesView({
               <div className="text-[10px] text-muted-foreground">Waveform</div>
               {gpuReady && <ScopeModeBar mode={waveformMode} onChange={setWaveformMode} />}
             </div>
-            <div
-              ref={waveformContainerRef}
-              className="w-[220px] h-[110px] rounded border border-border/70 bg-black/80"
+            <ScopeCanvasFrame
+              containerRef={waveformContainerRef}
+              kind="waveform"
+              className="w-[220px] h-[110px]"
             >
               <canvas ref={waveformCanvasRef} className="w-full h-full" />
-            </div>
+            </ScopeCanvasFrame>
           </div>
           <div>
             <div className="text-[10px] mb-1 text-muted-foreground">Vectorscope</div>
-            <div
-              ref={vectorscopeContainerRef}
-              className="w-[160px] h-[160px] rounded border border-border/70 bg-black/80"
+            <ScopeCanvasFrame
+              containerRef={vectorscopeContainerRef}
+              kind="vectorscope"
+              className="w-[160px] h-[160px]"
             >
               <canvas ref={vectorscopeCanvasRef} className="w-full h-full" />
-            </div>
+            </ScopeCanvasFrame>
           </div>
         </div>
       )}

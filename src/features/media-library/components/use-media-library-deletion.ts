@@ -11,7 +11,7 @@ import {
 
 const logger = createLogger('MediaLibrary')
 
-export interface PendingLibraryDeletion {
+interface PendingLibraryDeletion {
   mediaIds: string[]
   compositionIds: string[]
 }

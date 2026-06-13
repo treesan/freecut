@@ -16,7 +16,7 @@ vi.mock('../services/waveform-cache', () => ({
   },
 }))
 
-import { useWaveformPrefetch } from './use-waveform-prefetch'
+import { _resetWaveformPrefetchForTest, useWaveformPrefetch } from './use-waveform-prefetch'
 import { _resetPreviewWorkBudgetForTest } from './preview-work-budget'
 import { useItemsStore } from '../stores/items-store'
 import { useRippleEditPreviewStore } from '../stores/ripple-edit-preview-store'
@@ -61,11 +61,9 @@ function WaveformPrefetchProbe({ onRender }: { onRender: () => void }) {
 }
 
 async function flushPrefetchTimers() {
-  // Three passes drain the full prefetch chain: each store update reschedules the
-  // schedulePreviewWork debounce timer (advanceTimersByTime), the fired callback awaits
-  // a dynamic import() of the waveform-cache module, and the resolved import then queues
-  // the prefetch calls. The two Promise.resolve() drains flush the import microtask before
-  // the next pass advances timers, so any work it re-scheduled is picked up.
+  // Three passes drain the timer chain: each store update reschedules the
+  // schedulePreviewWork debounce timer, and the fired callback queues a dynamic
+  // import of the waveform-cache module.
   for (let i = 0; i < 3; i += 1) {
     await act(async () => {
       vi.advanceTimersByTime(120)
@@ -74,6 +72,12 @@ async function flushPrefetchTimers() {
       await Promise.resolve()
     })
   }
+}
+
+async function flushWaveformPrefetch() {
+  await flushPrefetchTimers()
+  await import('../services/waveform-cache')
+  await Promise.resolve()
 }
 
 /** Replicate the prefetch range calculation */
@@ -115,6 +119,7 @@ describe('waveform prefetch filtering', () => {
   const pps = 100
 
   beforeEach(() => {
+    _resetWaveformPrefetchForTest()
     _resetPreviewWorkBudgetForTest()
     useTimelineSettingsStore.setState({
       fps,
@@ -142,6 +147,7 @@ describe('waveform prefetch filtering', () => {
   })
 
   afterEach(() => {
+    _resetWaveformPrefetchForTest()
     _resetPreviewWorkBudgetForTest()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -248,7 +254,7 @@ describe('waveform prefetch filtering', () => {
           viewportHeight: 120,
         })
       })
-      await flushPrefetchTimers()
+      await flushWaveformPrefetch()
 
       expect(waveformCacheMocks.prefetch).toHaveBeenCalledWith(item.mediaId, 'blob:prefetch')
     } finally {
@@ -278,7 +284,7 @@ describe('waveform prefetch filtering', () => {
 
       render(createElement(WaveformPrefetchProbe, { onRender: () => {} }))
 
-      await flushPrefetchTimers()
+      await flushWaveformPrefetch()
 
       expect(waveformCacheMocks.prefetch).toHaveBeenCalledWith(item.mediaId, null)
     } finally {

@@ -16,7 +16,7 @@ function expectMapCloseTo(
     }
   }
 }
-import type { TimelineTrack, VideoItem } from '@/types/timeline'
+import type { CompositionItem, TimelineItem, TimelineTrack, VideoItem } from '@/types/timeline'
 import {
   collectClipVideoSourceTimesBySrcForFrame,
   collectClipVideoSourceTimesBySrcForFrameRange,
@@ -24,7 +24,9 @@ import {
   collectPlaybackStartVariableSpeedPrewarmItemIds,
   collectVisibleTrackVideoSourceTimesBySrc,
   getVideoItemSourceTimeSeconds,
+  mapTimelineFrameToSubCompositionFrame,
   resolvePausedVariableSpeedPrewarmPlan,
+  shouldRunJumpPreseek,
 } from './render-pump-preseek'
 
 function makeVideoItem(overrides: Partial<VideoItem> = {}): VideoItem {
@@ -356,5 +358,225 @@ describe('render pump preseek helpers', () => {
     ]
 
     expect(resolvePausedVariableSpeedPrewarmPlan(tracks, 100, 30)).toBeNull()
+  })
+})
+
+describe('shouldRunJumpPreseek', () => {
+  const fps = 30
+
+  it('never preseeks during playback', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 600, fps, isPlaying: true })).toBe(false)
+  })
+
+  it('never preseeks when the frame did not change', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 90, nextFrame: 90, fps, isPlaying: false })).toBe(
+      false,
+    )
+  })
+
+  it('skips forward jumps under 3 seconds (sequential advance is cheap)', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 89, fps, isPlaying: false })).toBe(false)
+  })
+
+  it('preseeks forward jumps of 3 seconds or more', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 90, fps, isPlaying: false })).toBe(true)
+  })
+
+  it('preseeks backward jumps of 0.5 seconds or more', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 90, nextFrame: 75, fps, isPlaying: false })).toBe(true)
+  })
+
+  it('skips tiny backward jumps under 0.5 seconds', () => {
+    expect(shouldRunJumpPreseek({ prevFrame: 90, nextFrame: 76, fps, isPlaying: false })).toBe(
+      false,
+    )
+  })
+
+  it('uses fps to scale thresholds', () => {
+    // 60fps: forward threshold 180 frames, backward threshold 30 frames
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 179, fps: 60, isPlaying: false })).toBe(
+      false,
+    )
+    expect(shouldRunJumpPreseek({ prevFrame: 0, nextFrame: 180, fps: 60, isPlaying: false })).toBe(
+      true,
+    )
+    expect(
+      shouldRunJumpPreseek({ prevFrame: 180, nextFrame: 150, fps: 60, isPlaying: false }),
+    ).toBe(true)
+    expect(
+      shouldRunJumpPreseek({ prevFrame: 180, nextFrame: 151, fps: 60, isPlaying: false }),
+    ).toBe(false)
+  })
+})
+
+describe('compound clip preseek recursion', () => {
+  function makeCompositionItem(overrides: Partial<CompositionItem> = {}): CompositionItem {
+    return {
+      id: 'comp-1',
+      trackId: 'track-1',
+      type: 'composition',
+      label: 'Compound',
+      compositionId: 'sub-1',
+      compositionWidth: 1920,
+      compositionHeight: 1080,
+      from: 100,
+      durationInFrames: 300,
+      ...overrides,
+    }
+  }
+
+  function makeSubVideoItem(overrides: Partial<VideoItem> = {}): VideoItem {
+    return {
+      id: 'sub-video-1',
+      trackId: 'sub-track-1',
+      type: 'video',
+      label: 'Sub Video',
+      src: 'blob:stale',
+      mediaId: 'media-1',
+      from: 60,
+      durationInFrames: 600,
+      sourceStart: 0,
+      sourceFps: 30,
+      speed: 1,
+      ...overrides,
+    }
+  }
+
+  function makeMixedTrack(items: TimelineItem[]): TimelineTrack {
+    return {
+      id: 'track-1',
+      name: 'Track 1',
+      height: 64,
+      locked: false,
+      visible: true,
+      muted: false,
+      solo: false,
+      order: 0,
+      items,
+    }
+  }
+
+  const resolveComposition =
+    (subItems: TimelineItem[], fps = 30) =>
+    (id: string) =>
+      id === 'sub-1' ? { fps, items: subItems } : null
+
+  it('collects video items inside a compound clip at the mapped sub-comp frame', () => {
+    const tracks = [makeMixedTrack([makeCompositionItem()])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 190, 30, {
+      requireExplicitSourceFps: true,
+      resolveComposition: resolveComposition([makeSubVideoItem()]),
+      resolveItemSrc: () => 'blob:fresh',
+    })
+
+    // relativeFrame 90 -> subCompFrame 90 -> localFrame 30 @30fps = 1.0s
+    expect(result.size).toBe(1)
+    expect(result.get('blob:fresh')![0]).toBeCloseTo(1.0)
+  })
+
+  it('skips composition items when no resolver is provided (old behavior)', () => {
+    const tracks = [makeMixedTrack([makeCompositionItem()])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 190, 30, {
+      requireExplicitSourceFps: true,
+    })
+    expect(result.size).toBe(0)
+  })
+
+  it('honors the wrapper trim (sourceStart) when mapping frames', () => {
+    const tracks = [makeMixedTrack([makeCompositionItem({ sourceStart: 30 })])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 190, 30, {
+      requireExplicitSourceFps: true,
+      resolveComposition: resolveComposition([makeSubVideoItem()]),
+      resolveItemSrc: () => 'blob:fresh',
+    })
+
+    // subCompFrame 30 + 90 = 120 -> localFrame 60 @30fps = 2.0s
+    expect(result.get('blob:fresh')![0]).toBeCloseTo(2.0)
+  })
+
+  it('honors wrapper speed when mapping frames', () => {
+    const tracks = [makeMixedTrack([makeCompositionItem({ speed: 2 })])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 190, 30, {
+      requireExplicitSourceFps: true,
+      resolveComposition: resolveComposition([makeSubVideoItem()]),
+      resolveItemSrc: () => 'blob:fresh',
+    })
+
+    // subCompFrame 180 -> localFrame 120 @30fps = 4.0s
+    expect(result.get('blob:fresh')![0]).toBeCloseTo(4.0)
+  })
+
+  it('maps into a sub-comp running at a different fps than the parent', () => {
+    const subItem = makeSubVideoItem({ sourceFps: 60 })
+    const tracks = [makeMixedTrack([makeCompositionItem()])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 190, 30, {
+      requireExplicitSourceFps: true,
+      resolveComposition: resolveComposition([subItem], 60),
+      resolveItemSrc: () => 'blob:fresh',
+    })
+
+    // 90 parent frames @30fps = 3s -> subCompFrame 180 @60fps -> localFrame 120 = 2.0s
+    expect(result.get('blob:fresh')![0]).toBeCloseTo(2.0)
+  })
+
+  it('ignores frames outside the compound clip window', () => {
+    const tracks = [makeMixedTrack([makeCompositionItem()])]
+    const options = {
+      requireExplicitSourceFps: true,
+      resolveComposition: resolveComposition([makeSubVideoItem()]),
+      resolveItemSrc: () => 'blob:fresh',
+    }
+    expect(collectVisibleTrackVideoSourceTimesBySrc(tracks, 99, 30, options).size).toBe(0)
+    expect(collectVisibleTrackVideoSourceTimesBySrc(tracks, 400, 30, options).size).toBe(0)
+  })
+
+  it('falls back to the stored sub-item src when no src resolver is given', () => {
+    const tracks = [makeMixedTrack([makeCompositionItem()])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 190, 30, {
+      requireExplicitSourceFps: true,
+      resolveComposition: resolveComposition([makeSubVideoItem()]),
+    })
+    expect([...result.keys()]).toEqual(['blob:stale'])
+  })
+
+  it('skips sub items without explicit sourceFps when required', () => {
+    const subItem = makeSubVideoItem({ sourceFps: undefined })
+    const tracks = [makeMixedTrack([makeCompositionItem()])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 190, 30, {
+      requireExplicitSourceFps: true,
+      resolveComposition: resolveComposition([subItem]),
+      resolveItemSrc: () => 'blob:fresh',
+    })
+    expect(result.size).toBe(0)
+  })
+
+  it('resolves direct video items with empty stored src by mediaId', () => {
+    const direct = makeSubVideoItem({ id: 'direct-1', src: '', from: 150, durationInFrames: 90 })
+    const tracks = [makeMixedTrack([direct])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 180, 30, {
+      requireExplicitSourceFps: true,
+      resolveItemSrc: (item) => (item.mediaId === 'media-1' ? 'blob:fresh' : null),
+    })
+
+    // localFrame 30 @30fps = 1.0s
+    expect(result.size).toBe(1)
+    expect(result.get('blob:fresh')![0]).toBeCloseTo(1.0)
+  })
+
+  it('still skips direct video items with no stored src and no resolver', () => {
+    const direct = makeSubVideoItem({ id: 'direct-1', src: '', from: 150, durationInFrames: 90 })
+    const tracks = [makeMixedTrack([direct])]
+    const result = collectVisibleTrackVideoSourceTimesBySrc(tracks, 180, 30, {
+      requireExplicitSourceFps: true,
+    })
+    expect(result.size).toBe(0)
+  })
+
+  it('maps timeline frames to sub-comp frames at window boundaries', () => {
+    const item = makeCompositionItem()
+    expect(mapTimelineFrameToSubCompositionFrame(item, 100, 30, 30)).toBe(0)
+    expect(mapTimelineFrameToSubCompositionFrame(item, 399, 30, 30)).toBe(299)
+    expect(mapTimelineFrameToSubCompositionFrame(item, 99, 30, 30)).toBeNull()
+    expect(mapTimelineFrameToSubCompositionFrame(item, 400, 30, 30)).toBeNull()
   })
 })

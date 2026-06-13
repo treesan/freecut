@@ -29,6 +29,7 @@ import { ProjectDebugPanel } from './project-debug-panel'
 import { SettingsDialog } from './settings-dialog'
 import { ShortcutsDialog } from './shortcuts-dialog'
 import { UnsavedChangesDialog } from './unsaved-changes-dialog'
+import { WorkspaceSwitcher } from './workspace-switcher'
 import { WhatsNewDialog } from './whats-new-dialog'
 import { hasUnseenChangelog } from './whats-new-seen'
 import { EDITOR_LAYOUT_CSS_VALUES } from '@/config/editor-layout'
@@ -199,7 +200,9 @@ export const Toolbar = memo(function Toolbar({
         </div>
       </div>
 
-      <div className="flex-1" />
+      <div className="flex flex-1 items-center justify-center">
+        <WorkspaceSwitcher />
+      </div>
 
       <LocalInferenceStatusPill />
 

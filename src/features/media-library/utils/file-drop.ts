@@ -12,7 +12,7 @@ export interface ExtractedMediaFileDropResult {
   errors: string[]
 }
 
-export function supportsFileSystemDragDrop(dataTransfer: DataTransfer): boolean {
+function supportsFileSystemDragDrop(dataTransfer: DataTransfer): boolean {
   const firstItem = dataTransfer.items[0]
   return !!firstItem && 'getAsFileSystemHandle' in firstItem
 }

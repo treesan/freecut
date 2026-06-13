@@ -12,9 +12,16 @@ describe('editor-store', () => {
     useSettingsStore.getState().setSetting('editorDensity', DEFAULT_EDITOR_DENSITY_PRESET)
     const editorLayout = getEditorLayout(DEFAULT_EDITOR_DENSITY_PRESET)
 
+    // Clear persisted workspace layouts so tests are order-independent
+    localStorage.removeItem('editor:workspace')
+    localStorage.removeItem('editor:workspaceLayout:edit')
+    localStorage.removeItem('editor:workspaceLayout:color')
+    localStorage.removeItem('editor:propertiesFullColumn')
+
     // Reset store to defaults between tests
     useEditorStore.setState({
       activePanel: null,
+      workspace: 'edit',
       leftSidebarOpen: true,
       rightSidebarOpen: true,
       keyframeEditorOpen: false,
@@ -35,6 +42,8 @@ describe('editor-store', () => {
       sourcePatchAudioTrackId: null,
       linkedSelectionEnabled: true,
       colorScopesOpen: false,
+      propertiesFullColumn: false,
+      mediaFullColumn: true,
     })
   })
 
@@ -202,6 +211,62 @@ describe('editor-store', () => {
 
     useEditorStore.getState().setColorScopesOpen(false)
     expect(useEditorStore.getState().colorScopesOpen).toBe(false)
+  })
+
+  it('applies the workspace preset when switching workspaces', () => {
+    expect(useEditorStore.getState().workspace).toBe('edit')
+
+    useEditorStore.getState().setWorkspace('color')
+
+    const state = useEditorStore.getState()
+    expect(state.workspace).toBe('color')
+    expect(state.colorScopesOpen).toBe(true)
+    expect(state.clipInspectorTab).toBe('effects')
+    expect(state.activeTab).toBe('effects')
+
+    useEditorStore.getState().setWorkspace('edit')
+
+    const editState = useEditorStore.getState()
+    expect(editState.workspace).toBe('edit')
+    expect(editState.colorScopesOpen).toBe(false)
+    expect(editState.clipInspectorTab).toBe('video')
+    expect(editState.activeTab).toBe('media')
+  })
+
+  it('remembers per-workspace layout tweaks across a round trip', () => {
+    useEditorStore.getState().setWorkspace('color')
+    useEditorStore.getState().setColorScopesOpen(false)
+    useEditorStore.getState().setClipInspectorTab('audio')
+
+    useEditorStore.getState().setWorkspace('edit')
+    useEditorStore.getState().setWorkspace('color')
+
+    const state = useEditorStore.getState()
+    expect(state.colorScopesOpen).toBe(false)
+    expect(state.clipInspectorTab).toBe('audio')
+  })
+
+  it('persists workspace layout tweaks without requiring a workspace switch', () => {
+    useEditorStore.getState().setWorkspace('color')
+    useEditorStore.getState().setActiveTab('ai')
+    useEditorStore.getState().setClipInspectorTab('audio')
+    useEditorStore.getState().setColorScopesOpen(false)
+    useEditorStore.getState().togglePropertiesFullColumn()
+
+    const raw = localStorage.getItem('editor:workspaceLayout:color')
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw ?? '{}')).toEqual({
+      activeTab: 'ai',
+      clipInspectorTab: 'audio',
+      colorScopesOpen: false,
+      propertiesFullColumn: false,
+    })
+  })
+
+  it('ignores setWorkspace for the active workspace', () => {
+    const currentState = useEditorStore.getState()
+    useEditorStore.getState().setWorkspace('edit')
+    expect(useEditorStore.getState()).toBe(currentState)
   })
 
   it('toggles linked selection', () => {

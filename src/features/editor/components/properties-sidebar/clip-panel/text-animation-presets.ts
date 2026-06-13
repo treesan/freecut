@@ -15,7 +15,7 @@ export type TextAnimationPresetId =
 export type TextAnimationPresetOptionId = 'none' | TextAnimationPresetId
 export type TextAnimationPhase = 'intro' | 'outro'
 
-export interface TextAnimationPreset {
+interface TextAnimationPreset {
   id: TextAnimationPresetId
   labelKey: string
 }

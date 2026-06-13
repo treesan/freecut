@@ -10,6 +10,7 @@ import {
 } from '../utils/adaptive-preview-quality'
 import { shouldPreferPlayerForStyledTextScrub as shouldPreferPlayerForStyledTextScrubGuard } from '../utils/text-render-guard'
 import { getPreviewRuntimeSnapshotFromPlaybackState } from '../utils/preview-state-coordinator'
+import { resolvePlaybackColdStartFrameAdvance } from '../utils/playback-cold-start-event'
 import { usePreviewRuntimeGuards } from './use-preview-runtime-guards'
 import type { PreviewPerfStats } from './use-preview-diagnostics'
 
@@ -91,6 +92,7 @@ export function usePreviewPlaybackController({
       if (interactionMode === 'scrubbing') return
 
       if (interactionMode === 'playing') {
+        resolvePlaybackColdStartFrameAdvance(nextFrame)
         const nowMs = performance.now()
         const previousSample = adaptiveFrameSampleRef.current
         if (previousSample && nextFrame !== previousSample.frame) {

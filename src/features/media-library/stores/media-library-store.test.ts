@@ -26,6 +26,8 @@ const proxyServiceMocks = vi.hoisted(() => ({
   onStatusChange: vi.fn((listener) => {
     proxyStatusListenerRef.current = listener
   }),
+  setMediaResolver: vi.fn(),
+  setFilmstripPrewarm: vi.fn(),
 }))
 
 const indexedDbMocks = vi.hoisted(() => ({
@@ -52,6 +54,12 @@ const loggerMocks = vi.hoisted(() => ({
 
 vi.mock('../services/media-library-service', () => ({
   mediaLibraryService: mediaLibraryServiceMocks,
+}))
+
+vi.mock('./media-library-service-access', () => ({
+  loadMediaLibraryService: vi.fn(async () => ({
+    mediaLibraryService: mediaLibraryServiceMocks,
+  })),
 }))
 
 vi.mock('../services/proxy-service', () => ({

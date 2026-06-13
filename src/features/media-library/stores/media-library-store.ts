@@ -8,7 +8,7 @@ import type {
   UnsupportedCodecFile,
 } from '../types'
 import type { MediaMetadata } from '@/types/storage'
-import { importMediaLibraryService } from '../services/media-library-service-loader'
+import { loadMediaLibraryService } from './media-library-service-access'
 import { createLogger, createOperationId } from '@/shared/logging/logger'
 import { proxyService } from '../services/proxy-service'
 import { getSharedProxyKey } from '../utils/proxy-key'
@@ -188,7 +188,7 @@ const newStore: MediaLibraryStoreApi =
 
           try {
             // v3: Load project-scoped media only
-            const { mediaLibraryService } = await importMediaLibraryService()
+            const { mediaLibraryService } = await loadMediaLibraryService()
             const mediaItems = await mediaLibraryService.getMediaForProject(currentProjectId)
 
             set({
@@ -535,6 +535,13 @@ if (!hotStore) {
     if (progress !== undefined) {
       store.setProxyProgress(mediaId, progress)
     }
+  })
+
+  proxyService.setMediaResolver((mediaId) => useMediaLibraryStore.getState().mediaById[mediaId])
+  proxyService.setFilmstripPrewarm(async (mediaId, proxyFile, duration, window) => {
+    const { importFilmstripCache } = await import('../deps/timeline-services')
+    const { filmstripCache } = await importFilmstripCache()
+    await filmstripCache.prewarmPriorityWindow(mediaId, proxyFile, duration, window)
   })
 }
 

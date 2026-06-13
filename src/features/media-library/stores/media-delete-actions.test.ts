@@ -22,6 +22,12 @@ vi.mock('../services/media-library-service', () => ({
   mediaLibraryService: mediaLibraryServiceMocks,
 }))
 
+vi.mock('./media-library-service-access', () => ({
+  loadMediaLibraryService: vi.fn(async () => ({
+    mediaLibraryService: mediaLibraryServiceMocks,
+  })),
+}))
+
 vi.mock('../services/proxy-service', () => ({
   proxyService: proxyServiceMocks,
 }))
@@ -31,10 +37,10 @@ vi.mock('@/infrastructure/browser/blob-url-manager', () => ({
 }))
 
 const sceneBrowserMocks = vi.hoisted(() => ({
-  invalidateMediaCaptionThumbnails: vi.fn(),
+  invalidateMediaCaptionCaches: vi.fn(),
 }))
 
-vi.mock('../deps/scene-browser', () => sceneBrowserMocks)
+vi.mock('../services/media-caption-cache-events', () => sceneBrowserMocks)
 
 type DeleteState = Partial<MediaLibraryState> & Partial<MediaLibraryActions>
 type DeleteUpdater =

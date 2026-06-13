@@ -36,6 +36,11 @@
   },
   "toolbar": {
     "ariaLabel": "Barra de herramientas del editor",
+    "workspaces": {
+      "label": "Espacios de trabajo",
+      "edit": "Edición",
+      "color": "Color"
+    },
     "backToProjects": "Volver a proyectos",
     "backToProjectsAria": "Volver a proyectos",
     "specs": "{{width}}x{{height}} | {{fps}} fps",

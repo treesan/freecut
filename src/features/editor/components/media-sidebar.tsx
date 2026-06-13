@@ -1,4 +1,14 @@
-import { useCallback, useMemo, useRef, useEffect, memo, Activity } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+  memo,
+  Activity,
+  lazy,
+  Suspense,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronDown,
@@ -37,14 +47,14 @@ import {
 import { KeyframeGraphPanel } from '@/features/editor/deps/timeline-contract'
 import { TransitionsPanel } from './transitions-panel'
 import {
-  createDefaultAdjustmentItem,
   createDefaultShapeItem,
   createTextTemplateItem,
   findCompatibleTrackForItemType,
   findNearestAvailableSpace,
   getDefaultGeneratedLayerDurationInFrames,
 } from '@/features/editor/deps/timeline-utils'
-import type { TextItem, ShapeItem, ShapeType, AdjustmentItem } from '@/types/timeline'
+import { addAdjustmentLayer } from '../utils/add-adjustment-layer'
+import type { TextItem, ShapeItem, ShapeType } from '@/types/timeline'
 import { useMaskEditorStore } from '@/features/editor/deps/preview'
 import type { VisualEffect, GpuEffect } from '@/types/effects'
 import { EFFECT_PRESETS } from '@/types/effects'
@@ -52,7 +62,7 @@ import { getGpuEffectDefaultParams } from '@/infrastructure/gpu-effects'
 import { useGpuEffectPreviewData } from '@/features/editor/deps/effects-contract'
 import { createLogger } from '@/shared/logging/logger'
 import { useSettingsStore } from '@/features/editor/deps/settings'
-import { AiPanel } from './ai-panel'
+const LazyAiPanel = lazy(() => import('./ai-panel').then((m) => ({ default: m.AiPanel })))
 import {
   TEXT_STYLE_PRESETS,
   type TextStylePresetLayout,
@@ -290,6 +300,11 @@ export const MediaSidebar = memo(function MediaSidebar() {
   const sidebarWidth = useEditorStore((s) => s.sidebarWidth)
   const setSidebarWidth = useEditorStore((s) => s.setSidebarWidth)
 
+  const [aiTabActivated, setAiTabActivated] = useState(activeTab === 'ai')
+  useEffect(() => {
+    if (activeTab === 'ai') setAiTabActivated(true)
+  }, [activeTab])
+
   // Auto-expand sidebar to 35% viewport when keyframe editor opens
   const prevKeyframeOpenRef = useRef(keyframeEditorOpen)
   const savedWidthBeforeExpandRef = useRef<number | null>(null)
@@ -462,41 +477,7 @@ export const MediaSidebar = memo(function MediaSidebar() {
   // Add adjustment layer to timeline at the best available position
   // Optionally with pre-applied effects and custom label
   const handleAddAdjustmentLayer = useCallback((effects?: VisualEffect[], label?: string) => {
-    // Read all needed state from stores directly to avoid subscriptions
-    const { tracks, items, fps, addItem } = useTimelineStore.getState()
-    const { activeTrackId, selectItems } = useSelectionStore.getState()
-
-    const targetTrack = findCompatibleTrackForItemType({
-      tracks,
-      items,
-      itemType: 'adjustment',
-      preferredTrackId: activeTrackId,
-    })
-
-    if (!targetTrack) {
-      logger.warn('No available track for adjustment layer')
-      return
-    }
-
-    const durationInFrames = getDefaultGeneratedLayerDurationInFrames(fps)
-
-    // Find the best position: start at playhead, find nearest available space
-    const proposedPosition = usePlaybackStore.getState().currentFrame
-    const finalPosition =
-      findNearestAvailableSpace(proposedPosition, durationInFrames, targetTrack.id, items) ??
-      proposedPosition
-
-    const adjustmentItem: AdjustmentItem = createDefaultAdjustmentItem({
-      trackId: targetTrack.id,
-      from: finalPosition,
-      durationInFrames,
-      effects,
-      label,
-    })
-
-    addItem(adjustmentItem)
-    // Select the new item
-    selectItems([adjustmentItem.id])
+    addAdjustmentLayer(effects, label)
   }, [])
 
   // Create adjustment layer with preset effects
@@ -1143,7 +1124,11 @@ export const MediaSidebar = memo(function MediaSidebar() {
             <div
               className={`min-h-0 flex-1 overflow-hidden ${activeTab === 'ai' ? 'block' : 'hidden'}`}
             >
-              <AiPanel />
+              {aiTabActivated && (
+                <Suspense fallback={null}>
+                  <LazyAiPanel />
+                </Suspense>
+              )}
             </div>
           </div>
         </Activity>

@@ -2,8 +2,22 @@ import { createLogger } from '@/shared/logging/logger'
 import { drawFullscreenCanvasPass } from '@/infrastructure/gpu-shared/fullscreen-canvas-pass'
 import { FULLSCREEN_QUAD_WGSL } from '@/infrastructure/gpu-shared/fullscreen-quad'
 import { COMMON_WGSL } from './common'
-import type { GpuEffectDefinition, GpuEffectInstance } from './types'
-import { GPU_EFFECT_REGISTRY, getGpuEffect } from './index'
+import type {
+  EffectDataTexturePayload,
+  EffectDataTextureSpec,
+  GpuEffectDefinition,
+  GpuEffectInstance,
+} from './types'
+
+interface DataTextureCacheEntry {
+  key: string
+  texture: GPUTexture
+  view: GPUTextureView
+  width: number
+  height: number
+  depth: number
+}
+import { GPU_EFFECT_REGISTRY, getGpuEffect } from './registry'
 
 function getLogger() {
   return createLogger('EffectsPipeline')
@@ -97,12 +111,15 @@ export class EffectsPipeline {
   private pongView: GPUTextureView | null = null
   // Cached bind groups keyed by "effectId:ping|pong" — invalidated when textures change
   private effectBindGroupCache = new Map<string, GPUBindGroup>()
+  // Auxiliary data textures (curve/color LUTs) keyed by "passIndex:effectType".
+  // Contents are rewritten in place when the build key changes; the texture is
+  // recreated (and bind groups invalidated) only when dimensions change.
+  private dataTextureCache = new Map<string, DataTextureCacheEntry>()
   // Cached blit bind groups for ping/pong input views
   private blitBindGroupPing: GPUBindGroup | null = null
   private blitBindGroupPong: GPUBindGroup | null = null
   // GPU backpressure: count of frames still in-flight on the GPU queue
   private gpuFramesInFlight = 0
-  private static MAX_FRAMES_IN_FLIGHT = 2
   // Reusable offscreen canvas for applyEffectsToCanvas output (non-batch)
   private outputCanvas: OffscreenCanvas | null = null
   private outputCtx: GPUCanvasContext | null = null
@@ -248,6 +265,13 @@ export class EffectsPipeline {
           buffer: { type: 'uniform' },
         })
       }
+      if (effect.dataTexture) {
+        entries.push({
+          binding: 3,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: effect.dataTexture.dimension },
+        })
+      }
 
       const bindGroupLayout = this.device.createBindGroupLayout({
         label: `effect-${id}-layout`,
@@ -297,6 +321,87 @@ export class EffectsPipeline {
     this.texH = h
   }
 
+  /**
+   * Ensure the auxiliary data texture for this pass is up to date.
+   * Rewrites contents in place when only the data changed; recreates the
+   * texture (invalidating cached bind groups) when dimensions changed.
+   */
+  private getOrUpdateDataTexture(
+    passIndex: number,
+    effect: GpuEffectInstance,
+    definition: GpuEffectDefinition,
+  ): GPUTextureView | null {
+    const spec = definition.dataTexture
+    if (!spec) return null
+
+    const cacheId = `${passIndex}:${effect.type}`
+    const key = spec.key(effect.params)
+    const cached = this.dataTextureCache.get(cacheId)
+    if (cached && cached.key === key) {
+      return cached.view
+    }
+
+    let payload: EffectDataTexturePayload
+    try {
+      payload = spec.build(effect.params)
+    } catch (e) {
+      getLogger().warn(`Failed to build data texture for ${effect.type}`, e)
+      return cached?.view ?? null
+    }
+
+    const entry = this.acquireDataTextureEntry(cacheId, effect.type, spec, payload, key, cached)
+    this.device.queue.writeTexture(
+      { texture: entry.texture },
+      payload.data as BufferSource,
+      { bytesPerRow: payload.width * 4, rowsPerImage: payload.height },
+      { width: payload.width, height: payload.height, depthOrArrayLayers: payload.depth },
+    )
+
+    return entry.view
+  }
+
+  /** Reuse the cached texture when dimensions match; otherwise recreate it. */
+  private acquireDataTextureEntry(
+    cacheId: string,
+    effectType: string,
+    spec: EffectDataTextureSpec,
+    payload: EffectDataTexturePayload,
+    key: string,
+    cached: DataTextureCacheEntry | undefined,
+  ): DataTextureCacheEntry {
+    const sameDims =
+      cached !== undefined &&
+      cached.width === payload.width &&
+      cached.height === payload.height &&
+      cached.depth === payload.depth
+
+    if (cached && sameDims) {
+      cached.key = key
+      return cached
+    }
+
+    cached?.texture.destroy()
+    const texture = this.device.createTexture({
+      label: `effect-${effectType}-data`,
+      size: { width: payload.width, height: payload.height, depthOrArrayLayers: payload.depth },
+      dimension: spec.dimension === '3d' ? '3d' : '2d',
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    })
+    const entry: DataTextureCacheEntry = {
+      key,
+      texture,
+      view: texture.createView({ dimension: spec.dimension }),
+      width: payload.width,
+      height: payload.height,
+      depth: payload.depth,
+    }
+    this.dataTextureCache.set(cacheId, entry)
+    // Bind groups reference the old texture view — rebuild them lazily.
+    this.effectBindGroupCache.clear()
+    return entry
+  }
+
   private getOrCreateUniformBuffer(passIndex: number, size: number): GPUBuffer {
     let buf = this.uniformBuffers[passIndex]
     if (buf && buf.size >= size) return buf
@@ -339,8 +444,16 @@ export class EffectsPipeline {
         this.device.queue.writeBuffer(uniformBuffer, 0, uniformData.buffer)
       }
 
+      // Auxiliary data texture (curve/color LUT) — kept current before binding.
+      let dataTextureView: GPUTextureView | null = null
+      if (definition.dataTexture) {
+        dataTextureView = this.getOrUpdateDataTexture(effectIndex, effect, definition)
+        if (!dataTextureView) continue
+      }
+
       // Cache bind groups by pass, effect type, and input view identity. Uniform data changes
-      // via writeBuffer, but each encoded pass gets a stable buffer object of its own.
+      // via writeBuffer (and data texture contents via writeTexture), but each encoded pass
+      // gets a stable buffer/texture object of its own.
       const viewKey = inputView === this.pingView ? 'ping' : 'pong'
       const cacheKey = `${effectIndex}:${effect.type}:${viewKey}`
       let bindGroup = this.effectBindGroupCache.get(cacheKey)
@@ -351,6 +464,9 @@ export class EffectsPipeline {
         ]
         if (uniformBuffer) {
           bindEntries.push({ binding: 2, resource: { buffer: uniformBuffer } })
+        }
+        if (dataTextureView) {
+          bindEntries.push({ binding: 3, resource: dataTextureView })
         }
         bindGroup = this.device.createBindGroup({ layout, entries: bindEntries })
         this.effectBindGroupCache.set(cacheKey, bindGroup)
@@ -402,151 +518,6 @@ export class EffectsPipeline {
         this.gpuFramesInFlight = Math.max(0, this.gpuFramesInFlight - 1)
       },
     )
-  }
-
-  /**
-   * Process a source through an effect chain and render to output canvas context.
-   * Accepts HTMLVideoElement for zero-copy GPU capture
-   * Returns false if skipped (GPU busy or no effects).
-   */
-  applyEffects(
-    source: OffscreenCanvas | HTMLCanvasElement | HTMLVideoElement,
-    effects: GpuEffectInstance[],
-    outputCtx: GPUCanvasContext,
-  ): boolean {
-    const enabled = effects.filter((e) => e.enabled)
-    if (enabled.length === 0) return false
-    if (!this.blitPipeline || !this.blitBindGroupLayout) return false
-
-    // Backpressure: skip if too many frames are already in-flight on the GPU
-    if (this.gpuFramesInFlight >= EffectsPipeline.MAX_FRAMES_IN_FLIGHT) return false
-
-    // Get dimensions — HTMLVideoElement uses videoWidth/videoHeight
-    const w = source instanceof HTMLVideoElement ? source.videoWidth : source.width
-    const h = source instanceof HTMLVideoElement ? source.videoHeight : source.height
-    if (w < 2 || h < 2) return false
-
-    this.ensurePingPong(w, h)
-    if (!this.pingTexture || !this.pongTexture) return false
-
-    // Upload source to ping texture
-    this.device.queue.copyExternalImageToTexture(
-      { source, flipY: false },
-      { texture: this.pingTexture },
-      { width: w, height: h },
-    )
-
-    const commandEncoder = this.device.createCommandEncoder()
-
-    // Run effect chain
-    const finalTex = this.runEffectChain(
-      commandEncoder,
-      enabled,
-      this.pingTexture,
-      this.pongTexture,
-      w,
-      h,
-    )
-
-    // Blit final result to output canvas (cached bind group for ping/pong input)
-    const isPingFinal = finalTex === this.pingTexture
-    const blitBindGroup = isPingFinal
-      ? (this.blitBindGroupPing ??= this.device.createBindGroup({
-          layout: this.blitBindGroupLayout!,
-          entries: [
-            { binding: 0, resource: this.sampler },
-            { binding: 1, resource: this.pingView! },
-          ],
-        }))
-      : (this.blitBindGroupPong ??= this.device.createBindGroup({
-          layout: this.blitBindGroupLayout!,
-          entries: [
-            { binding: 0, resource: this.sampler },
-            { binding: 1, resource: this.pongView! },
-          ],
-        }))
-
-    const outputPass = commandEncoder.beginRenderPass({
-      colorAttachments: [
-        {
-          view: outputCtx.getCurrentTexture().createView(),
-          loadOp: 'clear',
-          storeOp: 'store',
-        },
-      ],
-    })
-    outputPass.setPipeline(this.blitPipeline)
-    outputPass.setBindGroup(0, blitBindGroup)
-    outputPass.draw(6)
-    outputPass.end()
-
-    this.device.queue.submit([commandEncoder.finish()])
-
-    this.trackSubmittedWork()
-
-    return true
-  }
-
-  /**
-   * Apply effects chain and return result as ImageData (for export pipeline).
-   */
-  async applyEffectsToImageData(
-    imageData: ImageData,
-    effects: GpuEffectInstance[],
-  ): Promise<ImageData> {
-    const enabled = effects.filter((e) => e.enabled)
-    if (enabled.length === 0) return imageData
-
-    const w = imageData.width
-    const h = imageData.height
-    this.ensurePingPong(w, h)
-    if (!this.pingTexture || !this.pongTexture) return imageData
-
-    // Upload ImageData to ping texture
-    this.device.queue.writeTexture(
-      { texture: this.pingTexture },
-      imageData.data,
-      { bytesPerRow: w * 4 },
-      { width: w, height: h },
-    )
-
-    const commandEncoder = this.device.createCommandEncoder()
-
-    const finalTex = this.runEffectChain(
-      commandEncoder,
-      enabled,
-      this.pingTexture,
-      this.pongTexture,
-      w,
-      h,
-    )
-
-    // Read back result
-    const bytesPerRow = Math.ceil((w * 4) / 256) * 256 // align to 256
-    const readBuffer = this.device.createBuffer({
-      size: bytesPerRow * h,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    })
-    commandEncoder.copyTextureToBuffer(
-      { texture: finalTex },
-      { buffer: readBuffer, bytesPerRow },
-      { width: w, height: h },
-    )
-
-    this.device.queue.submit([commandEncoder.finish()])
-
-    await readBuffer.mapAsync(GPUMapMode.READ)
-    const mapped = new Uint8Array(readBuffer.getMappedRange())
-
-    // Copy with row stride handling
-    const resultData = new Uint8ClampedArray(w * h * 4)
-    for (let row = 0; row < h; row++) {
-      resultData.set(mapped.subarray(row * bytesPerRow, row * bytesPerRow + w * 4), row * w * 4)
-    }
-    readBuffer.unmap()
-    readBuffer.destroy()
-
-    return new ImageData(resultData, w, h)
   }
 
   /**
@@ -940,10 +911,6 @@ export class EffectsPipeline {
     return this.device
   }
 
-  getFormat(): GPUTextureFormat {
-    return this.format
-  }
-
   destroy(): void {
     this.pingTexture?.destroy()
     this.pongTexture?.destroy()
@@ -962,6 +929,10 @@ export class EffectsPipeline {
       buf.destroy()
     }
     this.uniformBuffers = []
+    for (const entry of this.dataTextureCache.values()) {
+      entry.texture.destroy()
+    }
+    this.dataTextureCache.clear()
     this.effectBindGroupCache.clear()
     this.blitBindGroupPing = null
     this.blitBindGroupPong = null
