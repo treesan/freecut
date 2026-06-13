@@ -6,12 +6,19 @@
  */
 import type { AdjustmentItem } from '@/types/timeline'
 import type { VisualEffect } from '@/types/effects'
-import { useTimelineStore } from '@/features/editor/deps/timeline-store'
 import {
+  executeTimelineCommand,
+  useItemsStore,
+  useTimelineSettingsStore,
+  useTimelineStore,
+} from '@/features/editor/deps/timeline-store'
+import {
+  createClassicTrack,
   createDefaultAdjustmentItem,
   findCompatibleTrackForItemType,
   findNearestAvailableSpace,
   getDefaultGeneratedLayerDurationInFrames,
+  getTrackKind,
 } from '@/features/editor/deps/timeline-utils'
 import { useSelectionStore } from '@/shared/state/selection'
 import { usePlaybackStore } from '@/shared/state/playback'
@@ -21,38 +28,68 @@ const logger = createLogger('AddAdjustmentLayer')
 
 export function addAdjustmentLayer(effects?: VisualEffect[], label?: string): boolean {
   // Read all needed state from stores directly to avoid subscriptions
-  const { tracks, items, fps, addItem } = useTimelineStore.getState()
+  const { tracks, items, fps } = useTimelineStore.getState()
   const { activeTrackId, selectItems } = useSelectionStore.getState()
 
-  const targetTrack = findCompatibleTrackForItemType({
+  const referenceTrack = findCompatibleTrackForItemType({
     tracks,
     items,
     itemType: 'adjustment',
     preferredTrackId: activeTrackId,
   })
 
-  if (!targetTrack) {
+  if (!referenceTrack) {
     logger.warn('No available track for adjustment layer')
     return false
   }
 
   const durationInFrames = getDefaultGeneratedLayerDurationInFrames(fps)
 
-  // Find the best position: start at playhead, find nearest available space
+  const videoTracks = tracks
+    .filter((track) => !track.isGroup && getTrackKind(track) === 'video' && !track.locked)
+    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+  const topVideoTrack = videoTracks[0] ?? referenceTrack
+
   const proposedPosition = usePlaybackStore.getState().currentFrame
-  const finalPosition =
-    findNearestAvailableSpace(proposedPosition, durationInFrames, targetTrack.id, items) ??
-    proposedPosition
+  const topTrackPosition = findNearestAvailableSpace(
+    proposedPosition,
+    durationInFrames,
+    topVideoTrack.id,
+    items,
+  )
+
+  let targetTrack = topVideoTrack
+  let createdTrack = false
+  if (topTrackPosition !== proposedPosition) {
+    targetTrack = createClassicTrack({
+      tracks,
+      kind: 'video',
+      order: (topVideoTrack.order ?? 0) - 1,
+      height: topVideoTrack.height,
+    })
+    createdTrack = true
+  }
 
   const adjustmentItem: AdjustmentItem = createDefaultAdjustmentItem({
     trackId: targetTrack.id,
-    from: finalPosition,
+    from: proposedPosition,
     durationInFrames,
     effects,
     label,
   })
 
-  addItem(adjustmentItem)
+  executeTimelineCommand(
+    'ADD_ADJUSTMENT_LAYER',
+    () => {
+      const store = useItemsStore.getState()
+      if (createdTrack) {
+        store.setTracks([...store.tracks, targetTrack])
+      }
+      store._addItem(adjustmentItem)
+      useTimelineSettingsStore.getState().markDirty()
+    },
+    { itemId: adjustmentItem.id, trackCreated: createdTrack },
+  )
   // Select the new item
   selectItems([adjustmentItem.id])
   return true

@@ -8,11 +8,13 @@ export type {
 } from '@/features/timeline/contracts/editor'
 export {
   captureSnapshot,
+  createClassicTrack,
   createDefaultAdjustmentItem,
   createScrubThrottleState,
   shouldCommitScrubFrame,
   createDefaultShapeItem,
   createTextTemplateItem,
+  executeTimelineCommand,
   findCompatibleTrackForItemType,
   findNearestAvailableSpace,
   getDefaultGeneratedLayerDurationInFrames,

@@ -475,7 +475,6 @@ export const ColorScopesView = memo(function ColorScopesView({
 
   const rendererRef = useRef<ScopeRenderer | null>(null)
   const gpuCtxCacheRef = useRef(new Map<HTMLCanvasElement, GpuCanvasContextCacheEntry>())
-  const gpuInitedRef = useRef(false)
   const gpuRenderInFlightRef = useRef(false)
   const cpuDrawInFlightRef = useRef(false)
   const cpuDrawPendingRef = useRef(false)
@@ -515,9 +514,20 @@ export const ColorScopesView = memo(function ColorScopesView({
   // ── GPU initialization ──────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!open || gpuInitedRef.current) return
-    gpuInitedRef.current = true
+    if (!open) return
+    let cancelled = false
+    const gpuCtxCache = gpuCtxCacheRef.current
+
+    setGpuReady(null)
+    rendererRef.current?.destroy()
+    rendererRef.current = null
+    gpuCtxCache.clear()
+
     ScopeRenderer.create().then((r) => {
+      if (cancelled) {
+        r?.destroy()
+        return
+      }
       if (r) {
         rendererRef.current = r
         setGpuReady(true)
@@ -525,16 +535,13 @@ export const ColorScopesView = memo(function ColorScopesView({
         setGpuReady(false)
       }
     })
-  }, [open])
-
-  useEffect(() => {
-    const gpuCtxCache = gpuCtxCacheRef.current
     return () => {
+      cancelled = true
       rendererRef.current?.destroy()
       rendererRef.current = null
       gpuCtxCache.clear()
     }
-  }, [])
+  }, [open])
 
   // ── GPU render loop ─────────────────────────────────────────────────────
 
@@ -542,6 +549,7 @@ export const ColorScopesView = memo(function ColorScopesView({
     if (!canvas) return null
     const renderer = rendererRef.current
     if (!renderer) return null
+    if (canvas.width < 2 || canvas.height < 2) return null
     const cache = gpuCtxCacheRef.current
     const cached = cache.get(canvas)
     if (cached && cached.width === canvas.width && cached.height === canvas.height) {
