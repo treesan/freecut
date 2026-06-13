@@ -16,6 +16,7 @@ describe('editor-store', () => {
     localStorage.removeItem('editor:workspace')
     localStorage.removeItem('editor:workspaceLayout:edit')
     localStorage.removeItem('editor:workspaceLayout:color')
+    localStorage.removeItem('editor:propertiesFullColumn')
 
     // Reset store to defaults between tests
     useEditorStore.setState({
@@ -41,6 +42,8 @@ describe('editor-store', () => {
       sourcePatchAudioTrackId: null,
       linkedSelectionEnabled: true,
       colorScopesOpen: false,
+      propertiesFullColumn: false,
+      mediaFullColumn: true,
     })
   })
 
@@ -241,6 +244,23 @@ describe('editor-store', () => {
     const state = useEditorStore.getState()
     expect(state.colorScopesOpen).toBe(false)
     expect(state.clipInspectorTab).toBe('audio')
+  })
+
+  it('persists workspace layout tweaks without requiring a workspace switch', () => {
+    useEditorStore.getState().setWorkspace('color')
+    useEditorStore.getState().setActiveTab('ai')
+    useEditorStore.getState().setClipInspectorTab('audio')
+    useEditorStore.getState().setColorScopesOpen(false)
+    useEditorStore.getState().togglePropertiesFullColumn()
+
+    const raw = localStorage.getItem('editor:workspaceLayout:color')
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw ?? '{}')).toEqual({
+      activeTab: 'ai',
+      clipInspectorTab: 'audio',
+      colorScopesOpen: false,
+      propertiesFullColumn: false,
+    })
   })
 
   it('ignores setWorkspace for the active workspace', () => {

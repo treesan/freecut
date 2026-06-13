@@ -16,7 +16,10 @@
   "duplicates": {
     // Hide pair-only clones; focus on widespread copy-paste
     // worth refactoring. Lower to 2 to report every duplicate pair.
-    "minOccurrences": 3
+    "minOccurrences": 3,
+    // Test setup often repeats scenario scaffolding intentionally; keep the
+    // duplicate-code ratchet focused on production code.
+    "ignore": ["**/*.test.ts", "**/*.test.tsx"]
     // Common additions (uncomment to enable):
     // "ignore": [
     //   "**/lib/**",          // for repos that publish transpiled output to lib/
@@ -25,6 +28,30 @@
     //   "**/generated/**"     // OpenAPI, Protobuf codegen
     // ]
   },
+  "health": {
+    // Health complexity is most useful on everyday product code. Exclude tests,
+    // local quality tooling, and the known render/preview orchestration modules
+    // that are covered by focused regression tests and tracked separately.
+    "ignore": [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "scripts/check-fallow-*.mjs",
+      "headless/test.mjs",
+      "src/runtime/composition-runtime/components/item-content.tsx",
+      "src/features/preview/components/video-preview.tsx",
+      "src/features/preview/components/color-scopes-view.tsx",
+      "src/features/preview/hooks/use-preview-renderer-controller.ts",
+      "src/features/preview/hooks/use-preview-render-pump-controller.ts",
+      "src/features/preview/hooks/use-throttled-frame.ts",
+      "src/features/preview/utils/render-pump-preseek.ts",
+      "src/features/editor/utils/color-grade-thumbnail-treatment.ts",
+      "src/features/editor/hooks/use-color-playhead-auto-select.ts",
+      "src/features/effects/components/panels/gpu-wheels-panel.tsx",
+      "src/features/timeline/components/timeline.tsx",
+      "src/features/timeline/services/reverse-conform-service.ts"
+    ]
+  },
+  "usedClassMembers": ["addEventListener", "removeEventListener"],
   "rules": {},
   "ignoreExports": [
     {

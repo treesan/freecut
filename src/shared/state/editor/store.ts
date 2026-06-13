@@ -56,6 +56,23 @@ function loadEditorWorkspaceLayout(workspace: EditorWorkspaceId): EditorWorkspac
   return layout
 }
 
+function getEditorWorkspaceLayoutSnapshot(state: EditorState): EditorWorkspaceLayout {
+  return {
+    colorScopesOpen: state.colorScopesOpen,
+    clipInspectorTab: state.clipInspectorTab,
+    activeTab: state.activeTab,
+    propertiesFullColumn: state.propertiesFullColumn,
+  }
+}
+
+function saveEditorWorkspaceLayout(workspace: EditorWorkspaceId, layout: EditorWorkspaceLayout): void {
+  try {
+    localStorage.setItem(workspaceLayoutStorageKey(workspace), JSON.stringify(layout))
+  } catch {
+    /* noop */
+  }
+}
+
 const initialWorkspace = loadEditorWorkspaceId()
 const initialWorkspaceLayout = loadEditorWorkspaceLayout(initialWorkspace)
 
@@ -162,17 +179,8 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
       // Remember the outgoing workspace's layout so the user's tweaks
       // survive a round trip; the incoming workspace restores its own
       // saved layout (or the preset on first visit).
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(state))
       try {
-        const currentLayout: EditorWorkspaceLayout = {
-          colorScopesOpen: state.colorScopesOpen,
-          clipInspectorTab: state.clipInspectorTab,
-          activeTab: state.activeTab,
-          propertiesFullColumn: state.propertiesFullColumn,
-        }
-        localStorage.setItem(
-          workspaceLayoutStorageKey(state.workspace),
-          JSON.stringify(currentLayout),
-        )
         localStorage.setItem(WORKSPACE_STORAGE_KEY, workspace)
       } catch {
         /* noop */
@@ -180,8 +188,18 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
 
       return { workspace, ...loadEditorWorkspaceLayout(workspace) }
     }),
-  setActiveTab: (tab) => set({ activeTab: tab }),
-  setClipInspectorTab: (tab) => set({ clipInspectorTab: tab }),
+  setActiveTab: (tab) =>
+    set((state) => {
+      const nextState = { ...state, activeTab: tab }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { activeTab: tab }
+    }),
+  setClipInspectorTab: (tab) =>
+    set((state) => {
+      const nextState = { ...state, clipInspectorTab: tab }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { clipInspectorTab: tab }
+    }),
   setSidebarWidth: (width) => {
     try {
       localStorage.setItem('editor:sidebarWidth', String(width))
@@ -308,8 +326,19 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   setLinkedSelectionEnabled: (enabled) => set({ linkedSelectionEnabled: enabled }),
   toggleLinkedSelectionEnabled: () =>
     set((state) => ({ linkedSelectionEnabled: !state.linkedSelectionEnabled })),
-  setColorScopesOpen: (open) => set({ colorScopesOpen: open }),
-  toggleColorScopesOpen: () => set((state) => ({ colorScopesOpen: !state.colorScopesOpen })),
+  setColorScopesOpen: (open) =>
+    set((state) => {
+      const nextState = { ...state, colorScopesOpen: open }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { colorScopesOpen: open }
+    }),
+  toggleColorScopesOpen: () =>
+    set((state) => {
+      const colorScopesOpen = !state.colorScopesOpen
+      const nextState = { ...state, colorScopesOpen }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
+      return { colorScopesOpen }
+    }),
   setMixerFloating: (floating) => {
     try {
       localStorage.setItem('editor:mixerFloating', String(floating))
@@ -336,6 +365,8 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
       } catch {
         /* noop */
       }
+      const nextState = { ...state, propertiesFullColumn: next }
+      saveEditorWorkspaceLayout(state.workspace, getEditorWorkspaceLayoutSnapshot(nextState))
       return { propertiesFullColumn: next }
     }),
   toggleMediaFullColumn: () =>

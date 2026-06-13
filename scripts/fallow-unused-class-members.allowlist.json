@@ -138,7 +138,6 @@
       "path": "src/runtime/player/player-emitter.ts",
       "reason": "Audited as retained player event surface and dispatch API.",
       "members": [
-        { "parentName": "PlayerEmitter", "memberName": "addEventListener", "kind": "class_method" },
         { "parentName": "PlayerEmitter", "memberName": "dispatchEnded", "kind": "class_method" },
         { "parentName": "PlayerEmitter", "memberName": "dispatchError", "kind": "class_method" },
         { "parentName": "PlayerEmitter", "memberName": "dispatchFullscreenChange", "kind": "class_method" },
@@ -149,8 +148,7 @@
         { "parentName": "PlayerEmitter", "memberName": "dispatchSeek", "kind": "class_method" },
         { "parentName": "PlayerEmitter", "memberName": "dispatchTimeUpdate", "kind": "class_method" },
         { "parentName": "PlayerEmitter", "memberName": "dispatchVolumeChange", "kind": "class_method" },
-        { "parentName": "PlayerEmitter", "memberName": "dispatchWaiting", "kind": "class_method" },
-        { "parentName": "PlayerEmitter", "memberName": "removeEventListener", "kind": "class_method" }
+        { "parentName": "PlayerEmitter", "memberName": "dispatchWaiting", "kind": "class_method" }
       ]
     },
     {

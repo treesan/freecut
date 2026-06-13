@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const DEFAULT_BASE_REF = 'HEAD';
+const DEFAULT_BASE_REF = 'origin/staging';
 const FALLOW_PACKAGE = 'fallow@2.89.0';
 
 function getBaseRef() {
@@ -83,7 +83,11 @@ function runFallowAudit(baseRef) {
     throw new Error(`fallow audit did not return JSON output${stderr ? `:\n${stderr}` : '.'}`);
   }
 
-  return parseJson(result.stdout);
+  const report = parseJson(result.stdout);
+  if (report.error) {
+    throw new Error(report.message || 'fallow audit failed.');
+  }
+  return report;
 }
 
 function printReport(report, baseRef) {

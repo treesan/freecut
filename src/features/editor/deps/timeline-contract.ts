@@ -5,7 +5,6 @@
 export type {
   TimelineActions,
   TimelineState,
-  ScrubThrottleState,
 } from '@/features/timeline/contracts/editor'
 export {
   captureSnapshot,
