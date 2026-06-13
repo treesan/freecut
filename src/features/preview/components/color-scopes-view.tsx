@@ -583,6 +583,11 @@ export const ColorScopesView = memo(function ColorScopesView({
     let cancelled = false
     let lastTime = 0
     let inFlightSince = 0
+    // Monotonic id for each render that actually goes in-flight. Lets a render's
+    // `finally` clear the flag only if it still owns it — a slow (not infinite)
+    // capture that resolves after the watchdog already started a newer render
+    // must not reset the flag the newer render now holds.
+    let renderGeneration = 0
     // Clear any flag left wedged true by a render whose `finally` never ran on a
     // prior mount — otherwise the loop would start gated and never capture.
     gpuRenderInFlightRef.current = false
@@ -599,7 +604,6 @@ export const ColorScopesView = memo(function ColorScopesView({
       }
       if (time - lastTime >= GPU_INTERVAL && !gpuRenderInFlightRef.current) {
         lastTime = time
-        inFlightSince = time
         void renderGpuFrame()
       }
       requestAnimationFrame(tick)
@@ -610,7 +614,16 @@ export const ColorScopesView = memo(function ColorScopesView({
       // Scrub/hover preview frames are latency-sensitive. Let the program
       // monitor own those transient frames, then scopes catch up on release.
       if (usePlaybackStore.getState().previewFrame !== null) return
+      const generation = ++renderGeneration
       gpuRenderInFlightRef.current = true
+      // Stamp the in-flight start only once the flag is actually set, so the
+      // watchdog measures from when this render truly began (not from a tick
+      // whose render bailed out at a guard above).
+      inFlightSince = performance.now()
+      // A render is stale once cancelled or superseded by a newer one (e.g. the
+      // watchdog force-cleared this slow render and started another). Stale
+      // renders must not touch the GPU — that's the overlapping-upload hazard.
+      const isStale = () => cancelled || renderGeneration !== generation
       const { kr, kb } = getMatrixCoefficients(SCOPE_COLOR_MATRIX)
       renderer.setMatrix(kr, kb)
       renderer.setRange(0, 1)
@@ -623,9 +636,9 @@ export const ColorScopesView = memo(function ColorScopesView({
             fresh: isPlayingRef.current,
             preferRenderedFrame: true,
           })
-          if (source && !cancelled) {
+          if (source && !isStale()) {
             renderer.uploadFromCanvas(source)
-          } else if (!cancelled) {
+          } else if (!isStale()) {
             // No source available — try ImageData fallback
             await fallbackToImageData(renderer)
           }
@@ -633,7 +646,7 @@ export const ColorScopesView = memo(function ColorScopesView({
           await fallbackToImageData(renderer)
         }
 
-        if (cancelled) return
+        if (isStale()) return
 
         // Render each visible scope — hidden scopes have no mounted canvas,
         // so getGpuCtx returns null and they cost nothing.
@@ -662,7 +675,11 @@ export const ColorScopesView = memo(function ColorScopesView({
       } catch {
         setStatus('error')
       } finally {
-        gpuRenderInFlightRef.current = false
+        // Only release the flag if we still own it. If the watchdog superseded
+        // this render with a newer one, that render owns the flag now.
+        if (renderGeneration === generation) {
+          gpuRenderInFlightRef.current = false
+        }
       }
     }
 
