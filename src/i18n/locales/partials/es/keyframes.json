@@ -65,6 +65,11 @@
         "colorsHeading": "Fotogramas clave",
         "colorDefault": "Diamante naranja: un fotograma clave.",
         "colorSelected": "Naranja brillante con un anillo: fotograma clave seleccionado."
+      },
+      "keyframeMarker": {
+        "rowLabel": "Fotograma clave en el frame {{frame}}: arrastra para reubicar, Alt+arrastrar para duplicar",
+        "groupLabel": "Fotograma clave de {{group}} en el frame {{frame}}: arrastra para reubicar, Alt+arrastrar para duplicar",
+        "locked": "Fotograma clave en el frame {{frame}} (fila bloqueada)"
       }
     }
   },

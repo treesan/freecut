@@ -65,6 +65,11 @@
         "colorsHeading": "キーフレーム",
         "colorDefault": "オレンジのダイヤ：キーフレーム。",
         "colorSelected": "リング付きの明るいオレンジ：選択中のキーフレーム。"
+      },
+      "keyframeMarker": {
+        "rowLabel": "フレーム {{frame}} のキーフレーム — ドラッグでタイミング変更、Alt+ドラッグで複製",
+        "groupLabel": "フレーム {{frame}} の {{group}} キーフレーム — ドラッグでタイミング変更、Alt+ドラッグで複製",
+        "locked": "フレーム {{frame}} のキーフレーム（行はロック中）"
       }
     }
   },

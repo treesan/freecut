@@ -65,6 +65,11 @@
         "colorsHeading": "关键帧",
         "colorDefault": "橙色菱形：一个关键帧。",
         "colorSelected": "带光环的亮橙色：已选中的关键帧。"
+      },
+      "keyframeMarker": {
+        "rowLabel": "第 {{frame}} 帧的关键帧 — 拖动可调整时间，按住 Alt 拖动可复制",
+        "groupLabel": "第 {{frame}} 帧的 {{group}} 关键帧 — 拖动可调整时间，按住 Alt 拖动可复制",
+        "locked": "第 {{frame}} 帧的关键帧（行已锁定）"
       }
     }
   },

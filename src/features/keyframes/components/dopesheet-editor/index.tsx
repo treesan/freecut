@@ -2542,6 +2542,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
                       data-testid={`group-keyframe-${entry.group.id}-${frameGroup.frame}`}
                       className={cn(
                         'group absolute z-10 flex h-3 w-3 -ml-1.5 -mt-1.5 items-center justify-center',
+                        movableEntries.length > 0 && 'cursor-grab active:cursor-grabbing',
                         movableEntries.length === 0 && 'cursor-not-allowed opacity-50',
                       )}
                       style={{
@@ -2551,7 +2552,14 @@ export const DopesheetEditor = memo(function DopesheetEditor({
                       disabled={movableEntries.length === 0 || disabled}
                       onPointerDown={(event) => handleGroupKeyframePointerDown(frameGroup, event)}
                       onClick={(event) => event.stopPropagation()}
-                      aria-label={`${entry.group.label} keyframe at frame ${frameGroup.frame}`}
+                      title={t('timeline.keyframeEditor.keyframeMarker.groupLabel', {
+                        group: getKeyframeGroupLabel(t, entry.group.id, entry.group.label),
+                        frame: frameGroup.frame,
+                      })}
+                      aria-label={t('timeline.keyframeEditor.keyframeMarker.groupLabel', {
+                        group: getKeyframeGroupLabel(t, entry.group.id, entry.group.label),
+                        frame: frameGroup.frame,
+                      })}
                     >
                       <span
                         className={cn(
@@ -2630,6 +2638,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
                     data-testid={`row-keyframe-${row.property}-${keyframe.id}`}
                     className={cn(
                       'group absolute z-10 flex h-3 w-3 -ml-1.5 -mt-1.5 items-center justify-center',
+                      !rowLocked && 'cursor-grab active:cursor-grabbing',
                       rowLocked && 'cursor-not-allowed opacity-50',
                     )}
                     style={{
@@ -2641,7 +2650,24 @@ export const DopesheetEditor = memo(function DopesheetEditor({
                       handleKeyframePointerDown(row.property, keyframe.id, event)
                     }
                     onClick={(event) => event.stopPropagation()}
-                    aria-label={`Keyframe at frame ${keyframe.frame}`}
+                    title={
+                      rowLocked
+                        ? t('timeline.keyframeEditor.keyframeMarker.locked', {
+                            frame: keyframe.frame,
+                          })
+                        : t('timeline.keyframeEditor.keyframeMarker.rowLabel', {
+                            frame: keyframe.frame,
+                          })
+                    }
+                    aria-label={
+                      rowLocked
+                        ? t('timeline.keyframeEditor.keyframeMarker.locked', {
+                            frame: keyframe.frame,
+                          })
+                        : t('timeline.keyframeEditor.keyframeMarker.rowLabel', {
+                            frame: keyframe.frame,
+                          })
+                    }
                   >
                     <span
                       className={cn(

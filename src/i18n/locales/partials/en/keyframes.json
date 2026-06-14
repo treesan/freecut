@@ -65,6 +65,11 @@
         "colorsHeading": "Keyframes",
         "colorDefault": "Orange diamond: a keyframe.",
         "colorSelected": "Bright orange with a ring: selected keyframe."
+      },
+      "keyframeMarker": {
+        "rowLabel": "Keyframe at frame {{frame}} — drag to retime, Alt-drag to duplicate",
+        "groupLabel": "{{group}} keyframe at frame {{frame}} — drag to retime, Alt-drag to duplicate",
+        "locked": "Keyframe at frame {{frame}} (row locked)"
       }
     }
   },

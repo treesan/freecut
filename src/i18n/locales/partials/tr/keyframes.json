@@ -65,6 +65,11 @@
         "colorsHeading": "Anahtar kareler",
         "colorDefault": "Turuncu elmas: bir anahtar kare.",
         "colorSelected": "Halkalı parlak turuncu: seçili anahtar kare."
+      },
+      "keyframeMarker": {
+        "rowLabel": "{{frame}}. karedeki anahtar kare — zamanlamayı değiştirmek için sürükleyin, çoğaltmak için Alt+sürükleyin",
+        "groupLabel": "{{frame}}. karedeki {{group}} anahtar karesi — zamanlamayı değiştirmek için sürükleyin, çoğaltmak için Alt+sürükleyin",
+        "locked": "{{frame}}. karedeki anahtar kare (satır kilitli)"
       }
     }
   },
