@@ -50,6 +50,21 @@
         "easeIn": "Yavaş Giriş",
         "easeInOut": "Yavaş Giriş/Çıkış",
         "easeOut": "Yavaş Çıkış"
+      },
+      "legend": {
+        "trigger": "Bu simgeler ne anlama geliyor?",
+        "title": "Düzenleyici kılavuzu",
+        "modesHeading": "Görünümler",
+        "graphMode": "Grafik — her parametrenin değer eğrisini ve yumuşatmasını zaman içinde düzenleyin.",
+        "sheetMode": "Sayfa — tüm parametrelerin anahtar karelerini tek bir ızgarada görün ve taşıyın.",
+        "iconsHeading": "Satır denetimleri",
+        "iconCurve": "Bu parametrenin eğrisini Grafik görünümünde göster.",
+        "iconLock": "Satırı kilitler, böylece anahtar kareleri taşınamaz veya düzenlenemez.",
+        "iconAutoKey": "Otomatik anahtar: bu değeri her değiştirdiğinizde otomatik olarak bir anahtar kare yakalar.",
+        "iconDiamond": "Oynatma başlığında bir anahtar kare ekleyin veya kaldırın.",
+        "colorsHeading": "Anahtar kareler",
+        "colorDefault": "Turuncu elmas: bir anahtar kare.",
+        "colorSelected": "Halkalı parlak turuncu: seçili anahtar kare."
       }
     }
   },

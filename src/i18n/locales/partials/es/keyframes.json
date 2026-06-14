@@ -50,6 +50,21 @@
         "easeIn": "Entrada suave",
         "easeInOut": "Entrada/salida suave",
         "easeOut": "Salida suave"
+      },
+      "legend": {
+        "trigger": "¿Qué significan estos iconos?",
+        "title": "Guía del editor",
+        "modesHeading": "Vistas",
+        "graphMode": "Gráfico: edita la curva de valor y la suavización de cada parámetro a lo largo del tiempo.",
+        "sheetMode": "Hoja: ve y mueve los fotogramas clave de todos los parámetros en una sola cuadrícula.",
+        "iconsHeading": "Controles de fila",
+        "iconCurve": "Mostrar la curva de este parámetro en la vista de gráfico.",
+        "iconLock": "Bloquea la fila para que sus fotogramas clave no se puedan mover ni editar.",
+        "iconAutoKey": "Clave automática: captura un fotograma clave automáticamente cada vez que cambias este valor.",
+        "iconDiamond": "Añadir o quitar un fotograma clave en el cabezal de reproducción.",
+        "colorsHeading": "Fotogramas clave",
+        "colorDefault": "Diamante naranja: un fotograma clave.",
+        "colorSelected": "Naranja brillante con un anillo: fotograma clave seleccionado."
       }
     }
   },

@@ -50,6 +50,21 @@
         "easeIn": "缓入",
         "easeInOut": "缓入缓出",
         "easeOut": "缓出"
+      },
+      "legend": {
+        "trigger": "这些图标是什么意思？",
+        "title": "编辑器指南",
+        "modesHeading": "视图",
+        "graphMode": "曲线 — 随时间编辑每个参数的数值曲线和缓动。",
+        "sheetMode": "表格 — 在一个网格中查看并移动所有参数的关键帧。",
+        "iconsHeading": "行控件",
+        "iconCurve": "在曲线视图中显示此参数的曲线。",
+        "iconLock": "锁定该行，使其关键帧无法移动或编辑。",
+        "iconAutoKey": "自动关键帧：每当你更改此数值时自动记录一个关键帧。",
+        "iconDiamond": "在播放头处添加或移除关键帧。",
+        "colorsHeading": "关键帧",
+        "colorDefault": "橙色菱形：一个关键帧。",
+        "colorSelected": "带光环的亮橙色：已选中的关键帧。"
       }
     }
   },

@@ -39,6 +39,7 @@ import { DopesheetRulerHeader } from './dopesheet-ruler-header'
 import { DopesheetSheetBody } from './dopesheet-sheet-body'
 import { DopesheetInterpolationButtons } from './dopesheet-interpolation-buttons'
 import { DopesheetParameterMenu } from './dopesheet-parameter-menu'
+import { DopesheetLegendPopover } from './dopesheet-legend-popover'
 import { DopesheetViewOptionsMenu } from './dopesheet-view-options-menu'
 import { KeyframeTimingStrip } from './keyframe-timing-strip'
 import { setPointerCaptureSafely } from './dopesheet-utils'
@@ -2806,6 +2807,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
             verticalZoomDisabled={visibleGraphProperties.length === 0 || verticalZoomRatioBase <= 1}
             setGraphVerticalZoomValue={setGraphVerticalZoomValue}
           />
+          <DopesheetLegendPopover disabled={disabled} />
           <DopesheetViewOptionsMenu
             disabled={disabled}
             visualizationMode={visualizationMode}

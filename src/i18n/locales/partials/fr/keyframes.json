@@ -50,6 +50,21 @@
         "easeIn": "Entrée progressive",
         "easeInOut": "Entrée/sortie progressive",
         "easeOut": "Sortie progressive"
+      },
+      "legend": {
+        "trigger": "Que signifient ces icônes ?",
+        "title": "Guide de l'éditeur",
+        "modesHeading": "Vues",
+        "graphMode": "Courbe — modifiez la courbe de valeur et le lissage de chaque paramètre au fil du temps.",
+        "sheetMode": "Feuille — visualisez et déplacez les images clés de tous les paramètres sur une seule grille.",
+        "iconsHeading": "Commandes de ligne",
+        "iconCurve": "Afficher la courbe de ce paramètre dans la vue Courbe.",
+        "iconLock": "Verrouille la ligne pour que ses images clés ne puissent pas être déplacées ni modifiées.",
+        "iconAutoKey": "Image clé auto : capture automatiquement une image clé à chaque modification de cette valeur.",
+        "iconDiamond": "Ajouter ou supprimer une image clé à la tête de lecture.",
+        "colorsHeading": "Images clés",
+        "colorDefault": "Losange orange : une image clé.",
+        "colorSelected": "Orange vif avec un anneau : image clé sélectionnée."
       }
     }
   },

@@ -50,6 +50,21 @@
         "easeIn": "Ease In",
         "easeInOut": "Ease In/Out",
         "easeOut": "Ease Out"
+      },
+      "legend": {
+        "trigger": "What do these icons mean?",
+        "title": "Editor guide",
+        "modesHeading": "Views",
+        "graphMode": "Graph — edit each parameter's value curve and easing over time.",
+        "sheetMode": "Sheet — see and move every parameter's keyframes on one grid.",
+        "iconsHeading": "Row controls",
+        "iconCurve": "Show this parameter's curve in Graph view.",
+        "iconLock": "Lock the row so its keyframes can't be moved or edited.",
+        "iconAutoKey": "Auto-key: capture a keyframe automatically whenever you change this value.",
+        "iconDiamond": "Add or remove a keyframe at the playhead.",
+        "colorsHeading": "Keyframes",
+        "colorDefault": "Orange diamond: a keyframe.",
+        "colorSelected": "Bright orange with a ring: selected keyframe."
       }
     }
   },

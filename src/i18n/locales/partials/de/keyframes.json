@@ -50,6 +50,21 @@
         "easeIn": "Ease In",
         "easeInOut": "Ease In/Out",
         "easeOut": "Ease Out"
+      },
+      "legend": {
+        "trigger": "Was bedeuten diese Symbole?",
+        "title": "Editor-Leitfaden",
+        "modesHeading": "Ansichten",
+        "graphMode": "Graph — bearbeite die Wertekurve und Glättung jedes Parameters über die Zeit.",
+        "sheetMode": "Tabelle — sieh und verschiebe die Keyframes aller Parameter in einem Raster.",
+        "iconsHeading": "Zeilensteuerung",
+        "iconCurve": "Die Kurve dieses Parameters in der Graph-Ansicht anzeigen.",
+        "iconLock": "Sperrt die Zeile, sodass ihre Keyframes nicht verschoben oder bearbeitet werden können.",
+        "iconAutoKey": "Auto-Key: erfasst automatisch einen Keyframe, sobald du diesen Wert änderst.",
+        "iconDiamond": "Einen Keyframe am Abspielkopf hinzufügen oder entfernen.",
+        "colorsHeading": "Keyframes",
+        "colorDefault": "Oranges Diamant: ein Keyframe.",
+        "colorSelected": "Leuchtendes Orange mit Ring: ausgewählter Keyframe."
       }
     }
   },

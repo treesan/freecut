@@ -50,6 +50,21 @@
         "easeIn": "Entrada suave",
         "easeInOut": "Entrada/saída suave",
         "easeOut": "Saída suave"
+      },
+      "legend": {
+        "trigger": "O que significam estes ícones?",
+        "title": "Guia do editor",
+        "modesHeading": "Visualizações",
+        "graphMode": "Gráfico — edite a curva de valor e a suavização de cada parâmetro ao longo do tempo.",
+        "sheetMode": "Planilha — veja e mova os quadros-chave de todos os parâmetros em uma única grade.",
+        "iconsHeading": "Controles da linha",
+        "iconCurve": "Mostrar a curva deste parâmetro na visualização de gráfico.",
+        "iconLock": "Bloqueia a linha para que seus quadros-chave não possam ser movidos nem editados.",
+        "iconAutoKey": "Chave automática: captura um quadro-chave automaticamente sempre que você altera este valor.",
+        "iconDiamond": "Adicionar ou remover um quadro-chave no cursor de reprodução.",
+        "colorsHeading": "Quadros-chave",
+        "colorDefault": "Losango laranja: um quadro-chave.",
+        "colorSelected": "Laranja brilhante com um anel: quadro-chave selecionado."
       }
     }
   },
