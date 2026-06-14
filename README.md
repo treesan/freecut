@@ -19,7 +19,7 @@ folder you choose on disk.
 
 ## User Guide
 
-New to FreeCut? Start with the [user guide](docs/user-guide/README.md).
+New to FreeCut? Start with the [user guide](https://freecut.net/docs).
 
 ## Screenshots
 
