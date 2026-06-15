@@ -8,6 +8,13 @@
       "title": "Presets",
       "animationsHeading": "Animations",
       "easingHeading": "Easing",
+      "easingPresets": {
+        "soft": "Soft",
+        "easeOut": "Ease Out",
+        "easeIn": "Ease In",
+        "easeInOut": "Ease In/Out",
+        "overshoot": "Overshoot"
+      },
       "saveButton": "Save",
       "empty": "No saved animations yet",
       "savedToast": "Saved “{{name}}”",

@@ -33,27 +33,27 @@ const BUILTIN_EASING_PRESETS: ReadonlyArray<{
 }> = [
   {
     id: 'soft',
-    labelKey: 'timeline.keyframeEditor.bezierPreset.soft',
+    labelKey: 'editor.animatePresets.easingPresets.soft',
     bezier: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
   },
   {
     id: 'easeOut',
-    labelKey: 'timeline.keyframeEditor.bezierPreset.easeOut',
+    labelKey: 'editor.animatePresets.easingPresets.easeOut',
     bezier: { x1: 0.215, y1: 0.61, x2: 0.355, y2: 1 },
   },
   {
     id: 'easeIn',
-    labelKey: 'timeline.keyframeEditor.bezierPreset.easeIn',
+    labelKey: 'editor.animatePresets.easingPresets.easeIn',
     bezier: { x1: 0.55, y1: 0.055, x2: 0.675, y2: 0.19 },
   },
   {
     id: 'easeInOut',
-    labelKey: 'timeline.keyframeEditor.bezierPreset.easeInOut',
+    labelKey: 'editor.animatePresets.easingPresets.easeInOut',
     bezier: { x1: 0.645, y1: 0.045, x2: 0.355, y2: 1 },
   },
   {
     id: 'overshoot',
-    labelKey: 'timeline.keyframeEditor.bezierPreset.overshoot',
+    labelKey: 'editor.animatePresets.easingPresets.overshoot',
     bezier: { x1: 0.34, y1: 1.56, x2: 0.64, y2: 1 },
   },
 ]

@@ -8,6 +8,13 @@
       "title": "Préréglages",
       "animationsHeading": "Animations",
       "easingHeading": "Accélération",
+      "easingPresets": {
+        "soft": "Doux",
+        "easeOut": "Sortie douce",
+        "easeIn": "Entrée douce",
+        "easeInOut": "Entrée/Sortie",
+        "overshoot": "Dépassement"
+      },
       "saveButton": "Enregistrer",
       "empty": "Aucune animation enregistrée pour le moment",
       "savedToast": "« {{name}} » enregistré",

@@ -8,6 +8,13 @@
       "title": "프리셋",
       "animationsHeading": "애니메이션",
       "easingHeading": "이징",
+      "easingPresets": {
+        "soft": "부드럽게",
+        "easeOut": "이즈 아웃",
+        "easeIn": "이즈 인",
+        "easeInOut": "이즈 인/아웃",
+        "overshoot": "오버슈트"
+      },
       "saveButton": "저장",
       "empty": "저장된 애니메이션이 아직 없습니다",
       "savedToast": "“{{name}}”을(를) 저장했습니다",

@@ -8,6 +8,13 @@
       "title": "Hazır ayarlar",
       "animationsHeading": "Animasyonlar",
       "easingHeading": "Yumuşatma",
+      "easingPresets": {
+        "soft": "Yumuşak",
+        "easeOut": "Yavaşlayarak",
+        "easeIn": "Hızlanarak",
+        "easeInOut": "Yavaş/Hızlı",
+        "overshoot": "Aşma"
+      },
       "saveButton": "Kaydet",
       "empty": "Henüz kaydedilmiş animasyon yok",
       "savedToast": "“{{name}}” kaydedildi",

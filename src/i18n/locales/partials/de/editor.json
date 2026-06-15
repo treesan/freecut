@@ -8,6 +8,13 @@
       "title": "Voreinstellungen",
       "animationsHeading": "Animationen",
       "easingHeading": "Beschleunigung",
+      "easingPresets": {
+        "soft": "Weich",
+        "easeOut": "Ausklang",
+        "easeIn": "Einklang",
+        "easeInOut": "Ein/Ausklang",
+        "overshoot": "Überschwingen"
+      },
       "saveButton": "Speichern",
       "empty": "Noch keine gespeicherten Animationen",
       "savedToast": "„{{name}}“ gespeichert",

@@ -8,6 +8,13 @@
       "title": "Ajustes preestablecidos",
       "animationsHeading": "Animaciones",
       "easingHeading": "Suavizado",
+      "easingPresets": {
+        "soft": "Suave",
+        "easeOut": "Salida suave",
+        "easeIn": "Entrada suave",
+        "easeInOut": "Entrada/Salida",
+        "overshoot": "Rebote"
+      },
       "saveButton": "Guardar",
       "empty": "Aún no hay animaciones guardadas",
       "savedToast": "Se guardó «{{name}}»",

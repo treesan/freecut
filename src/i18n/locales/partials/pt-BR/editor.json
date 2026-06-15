@@ -8,6 +8,13 @@
       "title": "Predefinições",
       "animationsHeading": "Animações",
       "easingHeading": "Suavização",
+      "easingPresets": {
+        "soft": "Suave",
+        "easeOut": "Saída suave",
+        "easeIn": "Entrada suave",
+        "easeInOut": "Entrada/Saída",
+        "overshoot": "Ultrapassagem"
+      },
       "saveButton": "Salvar",
       "empty": "Nenhuma animação salva ainda",
       "savedToast": "“{{name}}” salvo",
