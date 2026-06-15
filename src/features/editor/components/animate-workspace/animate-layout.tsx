@@ -38,10 +38,17 @@ export const AnimateLayout = memo(function AnimateLayout({ project }: AnimateLay
         <AnimateTimelineStrip />
       </ErrorBoundary>
 
-      {/* Keyframe editing surface (dopesheet + curve editor) */}
+      {/* Keyframe editing surface — dopesheet + curve editor shown together */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
         <ErrorBoundary level="feature">
-          <KeyframeGraphPanel isOpen onToggle={noop} onClose={noop} placement="bottom" />
+          <KeyframeGraphPanel
+            isOpen
+            splitView
+            showCloseButton={false}
+            onToggle={noop}
+            onClose={noop}
+            placement="side"
+          />
         </ErrorBoundary>
       </div>
     </div>

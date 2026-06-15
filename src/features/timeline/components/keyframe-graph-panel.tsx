@@ -99,6 +99,11 @@ interface KeyframeGraphPanelProps {
   placement?: 'bottom' | 'top' | 'side'
   /** Side-lane docks stay persistent and should not expose a close affordance. */
   showCloseButton?: boolean
+  /**
+   * Render the dopesheet and curve/graph panes simultaneously (Animate
+   * workspace). The graph/sheet mode toggle is hidden since both are visible.
+   */
+  splitView?: boolean
 }
 
 type KeyframeEditorMode = 'graph' | 'dopesheet'
@@ -582,6 +587,7 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   onClose,
   placement = 'bottom',
   showCloseButton = true,
+  splitView = false,
 }: KeyframeGraphPanelProps) {
   const { t } = useTranslation()
   const easingOptions = useMemo(
@@ -1626,32 +1632,36 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
         </div>
 
         <div className="flex items-center gap-1">
-          <Button
-            variant={editorMode === 'graph' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-5 px-1.5 text-[10px]"
-            title={t('timeline.keyframeEditor.legend.graphMode')}
-            aria-label={t('timeline.keyframeEditor.legend.graphMode')}
-            onClick={(e) => {
-              e.stopPropagation()
-              setEditorMode('graph')
-            }}
-          >
-            {t('timeline.keyframeEditor.graph')}
-          </Button>
-          <Button
-            variant={editorMode === 'dopesheet' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-5 px-1.5 text-[10px]"
-            title={t('timeline.keyframeEditor.legend.sheetMode')}
-            aria-label={t('timeline.keyframeEditor.legend.sheetMode')}
-            onClick={(e) => {
-              e.stopPropagation()
-              setEditorMode('dopesheet')
-            }}
-          >
-            {t('timeline.keyframeEditor.sheet')}
-          </Button>
+          {!splitView && (
+            <>
+              <Button
+                variant={editorMode === 'graph' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-5 px-1.5 text-[10px]"
+                title={t('timeline.keyframeEditor.legend.graphMode')}
+                aria-label={t('timeline.keyframeEditor.legend.graphMode')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEditorMode('graph')
+                }}
+              >
+                {t('timeline.keyframeEditor.graph')}
+              </Button>
+              <Button
+                variant={editorMode === 'dopesheet' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-5 px-1.5 text-[10px]"
+                title={t('timeline.keyframeEditor.legend.sheetMode')}
+                aria-label={t('timeline.keyframeEditor.legend.sheetMode')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEditorMode('dopesheet')
+                }}
+              >
+                {t('timeline.keyframeEditor.sheet')}
+              </Button>
+            </>
+          )}
           {showCloseButton && (
             <Button
               variant="ghost"
@@ -1730,7 +1740,9 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
                 interpolationDisabled={selectedEditorKeyframes.length === 0}
                 onNavigateToKeyframe={handleNavigateToKeyframe}
                 transitionBlockedRanges={transitionBlockedRanges}
-                visualizationMode={editorMode === 'graph' ? 'graph' : 'dopesheet'}
+                visualizationMode={
+                  splitView ? 'split' : editorMode === 'graph' ? 'graph' : 'dopesheet'
+                }
               />
             </ErrorBoundary>
           ) : (

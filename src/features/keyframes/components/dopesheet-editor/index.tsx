@@ -186,8 +186,10 @@ interface DopesheetEditorProps {
   transitionBlockedRanges?: BlockedFrameRange[]
   /** Whether the editor is disabled */
   disabled?: boolean
-  /** Which visualization to render on the right side */
-  visualizationMode?: 'dopesheet' | 'graph'
+  /** Which visualization to render on the right side. `split` shows both the
+   *  sheet body and the curve/graph pane at once (Animate workspace placement),
+   *  sharing a single frame viewport and playhead so they cannot desync. */
+  visualizationMode?: 'dopesheet' | 'graph' | 'split'
   /** Additional class name */
   className?: string
 }
@@ -245,6 +247,12 @@ export const DopesheetEditor = memo(function DopesheetEditor({
   className,
 }: DopesheetEditorProps) {
   const { t } = useTranslation()
+  // `split` shows both panes at once. Derive per-pane visibility so the many
+  // mode branches below read intent ("is the graph showing?") rather than an
+  // exact mode, and the exclusive `dopesheet`/`graph` modes stay unchanged.
+  const showSheetPane = visualizationMode !== 'graph'
+  const showGraphPane = visualizationMode !== 'dopesheet'
+  const isSplitView = visualizationMode === 'split'
   const timelineRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const graphPaneRef = useRef<HTMLDivElement>(null)
@@ -429,7 +437,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
   }, [allPropertyGroups, setAllGroupsExpanded, setShowKeyframedOnly, setVisibleGroups])
 
   const graphPaneSize = useElementSize(graphPaneRef, {
-    enabled: visualizationMode === 'graph',
+    enabled: showGraphPane,
     deps: [visualizationMode, propertyRows.length],
   })
 
@@ -529,7 +537,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
   }, [keyframeMetaById, selectedKeyframeIds])
 
   useEffect(() => {
-    if (visualizationMode !== 'graph' || !selectedCurveProperty) {
+    if (!showGraphPane || !selectedCurveProperty) {
       return
     }
 
@@ -542,7 +550,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
     onPropertyChange,
     selectedCurveProperty,
     selectedProperty,
-    visualizationMode,
+    showGraphPane,
   ])
 
   const visibleKeyframes = useMemo(
@@ -1065,12 +1073,12 @@ export const DopesheetEditor = memo(function DopesheetEditor({
 
   const activateProperty = useCallback(
     (property: AnimatableProperty) => {
-      if (visualizationMode === 'graph') {
+      if (showGraphPane) {
         onPropertyChange?.(property)
       }
       onActivePropertyChange?.(property)
     },
-    [onActivePropertyChange, onPropertyChange, visualizationMode],
+    [onActivePropertyChange, onPropertyChange, showGraphPane],
   )
 
   const removeKeyframesForRows = useCallback(
@@ -1775,7 +1783,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
     [disabled, graphDisplayPropertyLocked, nudgeSelectedKeyframes, onRemoveKeyframes, selectedRefs],
   )
   const timingStripMarkers = useMemo(() => {
-    if (visualizationMode === 'graph') {
+    if (showGraphPane) {
       if (!activeSelectedProperty) {
         return []
       }
@@ -1804,7 +1812,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
     selectedKeyframeIds,
     selectedRefIds,
     visibleKeyframes,
-    visualizationMode,
+    showGraphPane,
   ])
   const constrainGraphFrameDelta = useCallback(
     (deltaFrames: number, draggedKeyframeIds: string[]) =>
@@ -1832,15 +1840,16 @@ export const DopesheetEditor = memo(function DopesheetEditor({
     commitSelectionFramePreview,
   })
 
-  // Mirror timing-strip preview into the dopesheet-mode drag preview
+  // Mirror timing-strip preview into the sheet drag preview. The sheet shows in
+  // both `dopesheet` and `split`, so mirror whenever the sheet pane is visible.
   useEffect(() => {
-    if (visualizationMode !== 'dopesheet') {
+    if (!showSheetPane) {
       scheduleDragPreviewFrames(null)
       return
     }
 
     scheduleDragPreviewFrames(timingStripPreviewFrames)
-  }, [scheduleDragPreviewFrames, timingStripPreviewFrames, visualizationMode])
+  }, [scheduleDragPreviewFrames, timingStripPreviewFrames, showSheetPane])
   const formatRulerTick = useCallback(
     (frame: number): string => {
       if (graphRulerUnit === 'frames' || !fps || fps <= 0) {
@@ -1886,16 +1895,12 @@ export const DopesheetEditor = memo(function DopesheetEditor({
             'group h-full px-1 flex items-center gap-px bg-muted/8',
             options?.indented && 'pl-3',
             row.controls.hasKeyframeAtCurrentFrame && 'bg-primary/10',
-            visualizationMode === 'graph' &&
-              graphVisibleProperties.has(row.property) &&
-              'bg-accent/40',
-            visualizationMode === 'graph' && !rowLocked && 'cursor-pointer',
+            showGraphPane && graphVisibleProperties.has(row.property) && 'bg-accent/40',
+            showGraphPane && !rowLocked && 'cursor-pointer',
             rowLocked && 'opacity-70',
           )}
           onClick={
-            visualizationMode === 'graph' && !rowLocked
-              ? () => activateProperty(row.property)
-              : undefined
+            showGraphPane && !rowLocked ? () => activateProperty(row.property) : undefined
           }
         >
           <div
@@ -2204,7 +2209,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
       togglePropertyCurve,
       toggleLockedProperty,
       valueDrafts,
-      visualizationMode,
+      showGraphPane,
     ],
   )
   const renderGroupHeaderContent = useCallback(
@@ -2665,6 +2670,93 @@ export const DopesheetEditor = memo(function DopesheetEditor({
     : t('timeline.keyframeEditor.noKeyframesToDisplay')
   const showEmptyGuidance = !hasPropertyFilters
 
+  // Hoisted so the graph pane and sheet body can be composed once and reused
+  // across the exclusive (`graph`/`dopesheet`) and the `split` placements.
+  const rulerHeaderElement = (
+    <DopesheetRulerHeader
+      propertyGridStyle={propertyGridStyle}
+      timelineRef={timelineRef}
+      onRulerPointerDown={handleRulerPointerDown}
+      onRulerPointerMove={handleRulerPointerMove}
+      onRulerPointerUp={handleRulerPointerUp}
+      rulerTickElements={rulerTickElements}
+    />
+  )
+  const playheadOverlayElement = (
+    <div
+      data-testid="dopesheet-playhead-clip"
+      className="absolute top-0 bottom-0 right-0 overflow-hidden pointer-events-none z-20"
+      style={{ left: PROPERTY_COLUMN_WIDTH }}
+    >
+      <DopesheetPlayheadLine
+        relativeFrame={currentFrame}
+        itemFrom={itemFrom}
+        totalFrames={totalFrames}
+        frameToX={frameToX}
+        maxLeft={effectiveTimelineWidth - 1}
+        className="absolute top-0 bottom-0 w-px bg-primary/80"
+      />
+    </div>
+  )
+  const sheetBodyElement = (
+    <DopesheetSheetBody
+      scrollAreaRef={scrollAreaRef}
+      hasRows={sheetRows.length > 0}
+      emptyStateMessage={emptyStateMessage}
+      showEmptyGuidance={showEmptyGuidance}
+      rowElements={rowElements}
+      marqueeRect={marqueeRect}
+      marqueeJustEnded={marqueeJustEndedRef.current}
+      onTimelineBackgroundPointerDown={handleTimelineBackgroundPointerDown}
+    />
+  )
+  const graphPaneElement = (
+    <DopesheetGraphPane
+      hasRows={propertyRows.length > 0}
+      emptyStateMessage={emptyStateMessage}
+      showEmptyGuidance={showEmptyGuidance}
+      propertyColumnElements={propertyColumnElements}
+      graphPaneRef={graphPaneRef}
+      disabled={disabled}
+      graphDisplayPropertyLocked={graphDisplayPropertyLocked}
+      focusGraphPane={focusGraphPane}
+      handleGraphPaneKeyDown={handleGraphPaneKeyDown}
+      graphPaneSize={graphPaneSize}
+      graphVisiblePropertiesSize={graphVisibleProperties.size}
+      viewport={viewport}
+      updateViewport={updateViewport}
+      itemId={itemId}
+      keyframesByProperty={keyframesByProperty}
+      graphDisplayProperty={graphDisplayProperty}
+      graphVisibleProperties={[...graphVisibleProperties]}
+      selectedKeyframeIds={selectedKeyframeIds}
+      currentFrame={currentFrame}
+      itemFrom={itemFrom}
+      totalFrames={totalFrames}
+      fps={fps}
+      onKeyframeMove={onKeyframeMove}
+      timingStripPreviewFrames={timingStripPreviewFrames}
+      constrainGraphFrameDelta={constrainGraphFrameDelta}
+      onBezierHandleMove={onBezierHandleMove}
+      onSelectionChange={onSelectionChange}
+      onPropertyChange={onPropertyChange}
+      onScrub={onScrub}
+      onScrubStart={onScrubStart}
+      onScrubEnd={onScrubEnd}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onAddKeyframe={onAddKeyframe}
+      onRemoveKeyframes={onRemoveKeyframes}
+      onNavigateToKeyframe={onNavigateToKeyframe}
+      transitionBlockedRanges={transitionBlockedRanges}
+      snapEnabled={snapEnabled}
+      graphHandleVisibility={showAllGraphHandles ? 'all' : 'selected'}
+      graphRulerUnit={graphRulerUnit}
+      autoZoomGraphHeight={autoZoomGraphHeight}
+      graphVerticalZoomValue={graphVerticalZoomValue}
+    />
+  )
+
   return (
     <div
       className={cn('flex h-full flex-col gap-0.5 overflow-hidden', className)}
@@ -2696,7 +2788,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
             </span>
           )}
 
-          {visualizationMode === 'graph' && graphDisplayProperty && (
+          {showGraphPane && graphDisplayProperty && (
             <span className="text-xs text-muted-foreground">
               {t('timeline.keyframeEditor.graphLabel', {
                 property: getKeyframePropertyLabel(t, graphDisplayProperty),
@@ -2729,7 +2821,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {visualizationMode === 'graph' && (
+          {showGraphPane && (
             <DopesheetInterpolationButtons
               options={interpolationOptions}
               selected={selectedInterpolation}
@@ -2755,7 +2847,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
             horizontalZoomDisabled={horizontalZoomRatioBase <= 1}
             setHorizontalZoomValue={setHorizontalZoomValue}
             resetViewport={resetViewport}
-            visualizationMode={visualizationMode}
+            visualizationMode={showGraphPane ? 'graph' : 'dopesheet'}
             graphVerticalZoomValue={graphVerticalZoomValue}
             verticalZoomDisabled={visibleGraphProperties.length === 0 || verticalZoomRatioBase <= 1}
             setGraphVerticalZoomValue={setGraphVerticalZoomValue}
@@ -2763,7 +2855,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
           <DopesheetLegendPopover disabled={disabled} />
           <DopesheetViewOptionsMenu
             disabled={disabled}
-            visualizationMode={visualizationMode}
+            visualizationMode={showGraphPane ? 'graph' : 'dopesheet'}
             graphRulerUnit={graphRulerUnit}
             onChangeRulerUnit={setGraphRulerUnit}
             graphHandleVisibility={showAllGraphHandles ? 'all' : 'selected'}
@@ -2778,108 +2870,38 @@ export const DopesheetEditor = memo(function DopesheetEditor({
         className={cn(
           'border border-border rounded-md flex-1 min-h-0 overflow-hidden relative',
           disabled && 'opacity-60 pointer-events-none',
+          isSplitView && 'flex flex-col',
         )}
         onWheel={visualizationMode === 'dopesheet' ? handleWheel : undefined}
       >
-        {/* Sheet mode only: the graph renders its own aligned playhead
-            (GraphPlayhead) using the graph's coordinate space. */}
-        {visualizationMode !== 'graph' && (
-          <div
-            data-testid="dopesheet-playhead-clip"
-            className="absolute top-0 bottom-0 right-0 overflow-hidden pointer-events-none z-20"
-            style={{ left: PROPERTY_COLUMN_WIDTH }}
-          >
-            <DopesheetPlayheadLine
-              relativeFrame={currentFrame}
-              itemFrom={itemFrom}
-              totalFrames={totalFrames}
-              frameToX={frameToX}
-              maxLeft={effectiveTimelineWidth - 1}
-              className="absolute top-0 bottom-0 w-px bg-primary/80"
-            />
-          </div>
-        )}
-        {visualizationMode === 'graph' ? (
+        {isSplitView ? (
           <>
-            <DopesheetRulerHeader
-              propertyGridStyle={propertyGridStyle}
-              timelineRef={timelineRef}
-              onRulerPointerDown={handleRulerPointerDown}
-              onRulerPointerMove={handleRulerPointerMove}
-              onRulerPointerUp={handleRulerPointerUp}
-              rulerTickElements={rulerTickElements}
-            />
-
-            <DopesheetGraphPane
-              hasRows={propertyRows.length > 0}
-              emptyStateMessage={emptyStateMessage}
-              showEmptyGuidance={showEmptyGuidance}
-              propertyColumnElements={propertyColumnElements}
-              graphPaneRef={graphPaneRef}
-              disabled={disabled}
-              graphDisplayPropertyLocked={graphDisplayPropertyLocked}
-              focusGraphPane={focusGraphPane}
-              handleGraphPaneKeyDown={handleGraphPaneKeyDown}
-              graphPaneSize={graphPaneSize}
-              graphVisiblePropertiesSize={graphVisibleProperties.size}
-              viewport={viewport}
-              updateViewport={updateViewport}
-              itemId={itemId}
-              keyframesByProperty={keyframesByProperty}
-              graphDisplayProperty={graphDisplayProperty}
-              graphVisibleProperties={[...graphVisibleProperties]}
-              selectedKeyframeIds={selectedKeyframeIds}
-              currentFrame={currentFrame}
-              itemFrom={itemFrom}
-              totalFrames={totalFrames}
-              fps={fps}
-              onKeyframeMove={onKeyframeMove}
-              timingStripPreviewFrames={timingStripPreviewFrames}
-              constrainGraphFrameDelta={constrainGraphFrameDelta}
-              onBezierHandleMove={onBezierHandleMove}
-              onSelectionChange={onSelectionChange}
-              onPropertyChange={onPropertyChange}
-              onScrub={onScrub}
-              onScrubStart={onScrubStart}
-              onScrubEnd={onScrubEnd}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onAddKeyframe={onAddKeyframe}
-              onRemoveKeyframes={onRemoveKeyframes}
-              onNavigateToKeyframe={onNavigateToKeyframe}
-              transitionBlockedRanges={transitionBlockedRanges}
-              snapEnabled={snapEnabled}
-              graphHandleVisibility={showAllGraphHandles ? 'all' : 'selected'}
-              graphRulerUnit={graphRulerUnit}
-              autoZoomGraphHeight={autoZoomGraphHeight}
-              graphVerticalZoomValue={graphVerticalZoomValue}
-            />
+            {rulerHeaderElement}
+            {/* Sheet on top (shared ruler + its aligned playhead overlay),
+                curve/graph below. Both panes share the single `viewport` and
+                `currentFrame`, so the two playheads cannot desync. */}
+            <div
+              className="relative min-h-0 flex-1 overflow-hidden"
+              onWheel={handleWheel}
+            >
+              {playheadOverlayElement}
+              {sheetBodyElement}
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden border-t border-border/60">
+              {graphPaneElement}
+            </div>
           </>
         ) : (
           <>
-            <DopesheetRulerHeader
-              propertyGridStyle={propertyGridStyle}
-              timelineRef={timelineRef}
-              onRulerPointerDown={handleRulerPointerDown}
-              onRulerPointerMove={handleRulerPointerMove}
-              onRulerPointerUp={handleRulerPointerUp}
-              rulerTickElements={rulerTickElements}
-            />
-
-            <DopesheetSheetBody
-              scrollAreaRef={scrollAreaRef}
-              hasRows={sheetRows.length > 0}
-              emptyStateMessage={emptyStateMessage}
-              showEmptyGuidance={showEmptyGuidance}
-              rowElements={rowElements}
-              marqueeRect={marqueeRect}
-              marqueeJustEnded={marqueeJustEndedRef.current}
-              onTimelineBackgroundPointerDown={handleTimelineBackgroundPointerDown}
-            />
+            {/* Sheet mode only: the graph renders its own aligned playhead
+                (GraphPlayhead) using the graph's coordinate space. */}
+            {showSheetPane && playheadOverlayElement}
+            {rulerHeaderElement}
+            {showGraphPane ? graphPaneElement : sheetBodyElement}
           </>
         )}
       </div>
-      {visualizationMode === 'graph' && (
+      {showGraphPane && (
         <div className="grid" style={propertyGridStyle}>
           <div className="h-4 border-t border-r border-border/60 bg-background/80" />
           <div data-testid="keyframe-timing-strip-viewport-column">
