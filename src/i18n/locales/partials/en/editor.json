@@ -29,6 +29,41 @@
         "cancel": "Cancel"
       }
     },
+    "motionPresets": {
+      "categories": {
+        "entrance": "Entrance",
+        "exit": "Exit",
+        "emphasis": "Emphasis",
+        "loop": "Loop"
+      },
+      "items": {
+        "fadeIn": "Fade In",
+        "slideInLeft": "Slide In Left",
+        "slideInRight": "Slide In Right",
+        "slideInUp": "Slide In Up",
+        "slideInDown": "Slide In Down",
+        "popIn": "Pop In",
+        "zoomIn": "Zoom In",
+        "spinIn": "Spin In",
+        "bounceIn": "Bounce In",
+        "fadeOut": "Fade Out",
+        "slideOutLeft": "Slide Out Left",
+        "slideOutRight": "Slide Out Right",
+        "slideOutUp": "Slide Out Up",
+        "slideOutDown": "Slide Out Down",
+        "popOut": "Pop Out",
+        "zoomOut": "Zoom Out",
+        "pulse": "Pulse",
+        "shake": "Shake",
+        "wobble": "Wobble",
+        "flash": "Flash",
+        "float": "Float",
+        "sway": "Sway",
+        "breathe": "Breathe",
+        "spin": "Spin",
+        "wiggle": "Wiggle"
+      }
+    },
     "shortcutsDialog": {
       "title": "Keyboard Shortcuts",
       "description": "Edit keyboard shortcut bindings."

@@ -17,3 +17,14 @@ export {
   getAutoKeyframeOperation,
   type AutoKeyframeOperation,
 } from '@/features/keyframes/utils/auto-keyframe'
+export { getAnimatablePropertiesForItem } from '@/features/keyframes/utils/animatable-properties'
+export {
+  MOTION_PRESETS,
+  MOTION_PRESETS_BY_ID,
+  MOTION_PRESET_CATEGORIES,
+  getMotionPresetAnchorFrame,
+  type MotionPreset,
+  type MotionPresetId,
+  type MotionPresetCategory,
+  type MotionThumbnail,
+} from '@/features/keyframes/utils/motion-presets'

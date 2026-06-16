@@ -29,6 +29,41 @@
         "cancel": "Cancelar"
       }
     },
+    "motionPresets": {
+      "categories": {
+        "entrance": "Entrada",
+        "exit": "Saída",
+        "emphasis": "Ênfase",
+        "loop": "Repetição"
+      },
+      "items": {
+        "fadeIn": "Surgir",
+        "slideInLeft": "Entrar pela esquerda",
+        "slideInRight": "Entrar pela direita",
+        "slideInUp": "Entrar de baixo",
+        "slideInDown": "Entrar de cima",
+        "popIn": "Surgir com salto",
+        "zoomIn": "Aproximar",
+        "spinIn": "Entrar girando",
+        "bounceIn": "Entrar quicando",
+        "fadeOut": "Desaparecer",
+        "slideOutLeft": "Sair pela esquerda",
+        "slideOutRight": "Sair pela direita",
+        "slideOutUp": "Sair para cima",
+        "slideOutDown": "Sair para baixo",
+        "popOut": "Sair com salto",
+        "zoomOut": "Afastar",
+        "pulse": "Pulsar",
+        "shake": "Sacudir",
+        "wobble": "Cambalear",
+        "flash": "Lampejo",
+        "float": "Flutuar",
+        "sway": "Balançar",
+        "breathe": "Respirar",
+        "spin": "Girar",
+        "wiggle": "Tremer"
+      }
+    },
     "shortcutsDialog": {
       "title": "Atalhos de teclado",
       "description": "Editar as combinações de teclas."

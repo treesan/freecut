@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import type { CanvasSettings } from '@/types/transform'
+import type { AnimatableProperty } from '@/types/keyframe'
 import { cn } from '@/shared/ui/cn'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -14,13 +16,98 @@ import {
   getPresetCompatibility,
   useItemsStore,
   useKeyframesStore,
+  useTimelineStore,
 } from '@/features/editor/deps/timeline-store'
+import { getSourceDimensions, resolveTransform } from '@/features/editor/deps/composition-runtime'
+import {
+  getAnimatablePropertiesForItem,
+  getMotionPresetAnchorFrame,
+  MOTION_PRESET_CATEGORIES,
+  MOTION_PRESETS,
+  resolveAnimatedTransform,
+  type MotionPreset,
+  type MotionPresetCategory,
+} from '@/features/editor/deps/keyframes'
 import {
   readAnimationPresets,
   saveAnimationPresets,
   type AnimationPreset,
 } from '@/infrastructure/storage'
+import { MotionPresetThumbnail } from './motion-preset-thumbnail'
 import { SaveAnimationPresetDialog } from './save-animation-preset-dialog'
+
+const presetsByCategory = MOTION_PRESET_CATEGORIES.reduce(
+  (map, category) => {
+    map[category] = MOTION_PRESETS.filter((preset) => preset.category === category)
+    return map
+  },
+  {} as Record<MotionPresetCategory, MotionPreset[]>,
+)
+
+interface MotionPresetSectionProps {
+  category: MotionPresetCategory
+  presets: MotionPreset[]
+  hasSelection: boolean
+  isCompatible: (preset: MotionPreset) => boolean
+  onApply: (preset: MotionPreset) => void
+  t: (key: string, options?: Record<string, unknown>) => string
+}
+
+/** One category of built-in motion presets, rendered as an animated icon grid. */
+const MotionPresetSection = memo(function MotionPresetSection({
+  category,
+  presets,
+  hasSelection,
+  isCompatible,
+  onApply,
+  t,
+}: MotionPresetSectionProps) {
+  return (
+    <section className="flex flex-col gap-1.5">
+      <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {t(`editor.motionPresets.categories.${category}`)}
+      </h3>
+      <div className="grid grid-cols-3 gap-1.5">
+        {presets.map((preset) => {
+          const disabled = !hasSelection || !isCompatible(preset)
+          const reason = !hasSelection
+            ? t('editor.animatePresets.selectClipFirst')
+            : !isCompatible(preset)
+              ? t('editor.animatePresets.incompatibleProperty')
+              : null
+          const label = t(`editor.motionPresets.items.${preset.labelKey}`)
+
+          const tile = (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onApply(preset)}
+              className={cn(
+                'group flex flex-col items-center gap-1 rounded-md border border-border/60 p-1.5 text-[10px]',
+                disabled
+                  ? 'cursor-not-allowed text-muted-foreground/50'
+                  : 'text-muted-foreground hover:border-border hover:bg-secondary/40 hover:text-foreground',
+              )}
+            >
+              <MotionPresetThumbnail thumbnail={preset.thumbnail} />
+              <span className="w-full truncate text-center leading-tight">{label}</span>
+            </button>
+          )
+
+          if (!reason) return <div key={preset.id}>{tile}</div>
+          return (
+            <Tooltip key={preset.id}>
+              <TooltipTrigger asChild>
+                <div>{tile}</div>
+              </TooltipTrigger>
+              <TooltipContent>{reason}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
+    </section>
+  )
+})
 
 /**
  * Animation preset library (U7, R16): browse and save/apply the project's saved
@@ -29,7 +116,11 @@ import { SaveAnimationPresetDialog } from './save-animation-preset-dialog'
  * selection render disabled with a reason tooltip. (Per-keyframe easing curves
  * live in the dopesheet's interpolation icon row, not here.)
  */
-export const AnimationPresetLibrary = memo(function AnimationPresetLibrary() {
+export const AnimationPresetLibrary = memo(function AnimationPresetLibrary({
+  canvas,
+}: {
+  canvas: CanvasSettings
+}) {
   const { t } = useTranslation()
   const projectId = useProjectStore((s) => s.currentProject?.id ?? null)
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds)
@@ -117,6 +208,60 @@ export const AnimationPresetLibrary = memo(function AnimationPresetLibrary() {
     [selectedItem, t],
   )
 
+  // Built-in motion presets resolve the clip's resting transform, build their
+  // keyframes against it, then commit through the same undo-integrated path as
+  // the text-animation presets.
+  const addKeyframes = useTimelineStore((s) => s.addKeyframes)
+
+  const motionPropertySet = useMemo(
+    () => (selectedItem ? new Set<AnimatableProperty>(getAnimatablePropertiesForItem(selectedItem)) : null),
+    [selectedItem],
+  )
+
+  const isMotionCompatible = useCallback(
+    (preset: MotionPreset) =>
+      !!motionPropertySet && preset.properties.every((property) => motionPropertySet.has(property)),
+    [motionPropertySet],
+  )
+
+  const handleApplyMotion = useCallback(
+    (preset: MotionPreset) => {
+      if (!selectedItem) {
+        toast.warning(t('editor.animatePresets.selectClipFirst'))
+        return
+      }
+      const base = resolveTransform(selectedItem, canvas, getSourceDimensions(selectedItem))
+      const anchorFrame = getMotionPresetAnchorFrame(
+        preset.category,
+        selectedItem.durationInFrames,
+        canvas.fps,
+      )
+      const anchor = resolveAnimatedTransform(
+        base,
+        selectedItemKeyframes ?? undefined,
+        anchorFrame,
+      )
+      const built = preset.build({
+        anchor,
+        durationInFrames: selectedItem.durationInFrames,
+        fps: canvas.fps,
+        frameWidth: canvas.width,
+        frameHeight: canvas.height,
+      })
+      if (built.length === 0) {
+        toast.warning(t('editor.animatePresets.applyFailed'))
+        return
+      }
+      addKeyframes(built.map((keyframe) => ({ itemId: selectedItem.id, ...keyframe })))
+      toast.success(
+        t('editor.animatePresets.appliedToast', {
+          name: t(`editor.motionPresets.items.${preset.labelKey}`),
+        }),
+      )
+    },
+    [addKeyframes, canvas, selectedItem, selectedItemKeyframes, t],
+  )
+
   const handleDelete = useCallback(
     async (preset: AnimationPreset) => {
       if (!projectId) return
@@ -184,7 +329,19 @@ export const AnimationPresetLibrary = memo(function AnimationPresetLibrary() {
         </div>
 
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-3 p-3">
+          <div className="flex flex-col gap-4 p-3">
+            {MOTION_PRESET_CATEGORIES.map((category) => (
+              <MotionPresetSection
+                key={category}
+                category={category}
+                presets={presetsByCategory[category]}
+                isCompatible={isMotionCompatible}
+                hasSelection={!!selectedItem}
+                onApply={handleApplyMotion}
+                t={t}
+              />
+            ))}
+
             <section className="flex flex-col gap-1">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {t('editor.animatePresets.animationsHeading')}

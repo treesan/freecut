@@ -29,6 +29,41 @@
         "cancel": "キャンセル"
       }
     },
+    "motionPresets": {
+      "categories": {
+        "entrance": "イン",
+        "exit": "アウト",
+        "emphasis": "強調",
+        "loop": "ループ"
+      },
+      "items": {
+        "fadeIn": "フェードイン",
+        "slideInLeft": "左からスライドイン",
+        "slideInRight": "右からスライドイン",
+        "slideInUp": "下からスライドイン",
+        "slideInDown": "上からスライドイン",
+        "popIn": "ポップイン",
+        "zoomIn": "ズームイン",
+        "spinIn": "スピンイン",
+        "bounceIn": "バウンスイン",
+        "fadeOut": "フェードアウト",
+        "slideOutLeft": "左へスライドアウト",
+        "slideOutRight": "右へスライドアウト",
+        "slideOutUp": "上へスライドアウト",
+        "slideOutDown": "下へスライドアウト",
+        "popOut": "ポップアウト",
+        "zoomOut": "ズームアウト",
+        "pulse": "パルス",
+        "shake": "シェイク",
+        "wobble": "ウォブル",
+        "flash": "フラッシュ",
+        "float": "フロート",
+        "sway": "スウェイ",
+        "breathe": "ブリーズ",
+        "spin": "スピン",
+        "wiggle": "ウィグル"
+      }
+    },
     "shortcutsDialog": {
       "title": "キーボードショートカット",
       "description": "キーボードショートカットの割り当てを編集します。"

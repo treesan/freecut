@@ -29,6 +29,41 @@
         "cancel": "取消"
       }
     },
+    "motionPresets": {
+      "categories": {
+        "entrance": "入场",
+        "exit": "出场",
+        "emphasis": "强调",
+        "loop": "循环"
+      },
+      "items": {
+        "fadeIn": "淡入",
+        "slideInLeft": "从左滑入",
+        "slideInRight": "从右滑入",
+        "slideInUp": "从下滑入",
+        "slideInDown": "从上滑入",
+        "popIn": "弹入",
+        "zoomIn": "放大进入",
+        "spinIn": "旋转进入",
+        "bounceIn": "弹跳进入",
+        "fadeOut": "淡出",
+        "slideOutLeft": "向左滑出",
+        "slideOutRight": "向右滑出",
+        "slideOutUp": "向上滑出",
+        "slideOutDown": "向下滑出",
+        "popOut": "弹出",
+        "zoomOut": "缩小退出",
+        "pulse": "脉冲",
+        "shake": "抖动",
+        "wobble": "摇摆",
+        "flash": "闪烁",
+        "float": "漂浮",
+        "sway": "摆动",
+        "breathe": "呼吸",
+        "spin": "旋转",
+        "wiggle": "扭动"
+      }
+    },
     "shortcutsDialog": {
       "title": "键盘快捷键",
       "description": "编辑键盘快捷键绑定。"

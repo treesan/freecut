@@ -29,6 +29,41 @@
         "cancel": "취소"
       }
     },
+    "motionPresets": {
+      "categories": {
+        "entrance": "등장",
+        "exit": "퇴장",
+        "emphasis": "강조",
+        "loop": "반복"
+      },
+      "items": {
+        "fadeIn": "페이드 인",
+        "slideInLeft": "왼쪽에서 슬라이드",
+        "slideInRight": "오른쪽에서 슬라이드",
+        "slideInUp": "아래에서 슬라이드",
+        "slideInDown": "위에서 슬라이드",
+        "popIn": "팝 인",
+        "zoomIn": "줌 인",
+        "spinIn": "회전 등장",
+        "bounceIn": "바운스 등장",
+        "fadeOut": "페이드 아웃",
+        "slideOutLeft": "왼쪽으로 슬라이드",
+        "slideOutRight": "오른쪽으로 슬라이드",
+        "slideOutUp": "위로 슬라이드",
+        "slideOutDown": "아래로 슬라이드",
+        "popOut": "팝 아웃",
+        "zoomOut": "줌 아웃",
+        "pulse": "펄스",
+        "shake": "흔들기",
+        "wobble": "흔들림",
+        "flash": "플래시",
+        "float": "떠오르기",
+        "sway": "흔들거림",
+        "breathe": "숨쉬기",
+        "spin": "회전",
+        "wiggle": "꿈틀거림"
+      }
+    },
     "shortcutsDialog": {
       "title": "키보드 단축키",
       "description": "키보드 단축키 할당을 편집합니다."

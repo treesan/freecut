@@ -29,6 +29,41 @@
         "cancel": "Annuler"
       }
     },
+    "motionPresets": {
+      "categories": {
+        "entrance": "Entrée",
+        "exit": "Sortie",
+        "emphasis": "Accent",
+        "loop": "Boucle"
+      },
+      "items": {
+        "fadeIn": "Apparition en fondu",
+        "slideInLeft": "Glisser depuis la gauche",
+        "slideInRight": "Glisser depuis la droite",
+        "slideInUp": "Glisser depuis le bas",
+        "slideInDown": "Glisser depuis le haut",
+        "popIn": "Apparition rebond",
+        "zoomIn": "Zoom avant",
+        "spinIn": "Entrée en rotation",
+        "bounceIn": "Entrée rebond",
+        "fadeOut": "Disparition en fondu",
+        "slideOutLeft": "Glisser vers la gauche",
+        "slideOutRight": "Glisser vers la droite",
+        "slideOutUp": "Glisser vers le haut",
+        "slideOutDown": "Glisser vers le bas",
+        "popOut": "Sortie rebond",
+        "zoomOut": "Zoom arrière",
+        "pulse": "Pulsation",
+        "shake": "Secousse",
+        "wobble": "Oscillation",
+        "flash": "Flash",
+        "float": "Flottement",
+        "sway": "Balancement",
+        "breathe": "Respiration",
+        "spin": "Rotation",
+        "wiggle": "Frétillement"
+      }
+    },
     "shortcutsDialog": {
       "title": "Raccourcis clavier",
       "description": "Modifier les raccourcis clavier."

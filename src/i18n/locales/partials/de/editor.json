@@ -29,6 +29,41 @@
         "cancel": "Abbrechen"
       }
     },
+    "motionPresets": {
+      "categories": {
+        "entrance": "Eingang",
+        "exit": "Ausgang",
+        "emphasis": "Betonung",
+        "loop": "Schleife"
+      },
+      "items": {
+        "fadeIn": "Einblenden",
+        "slideInLeft": "Von links einschieben",
+        "slideInRight": "Von rechts einschieben",
+        "slideInUp": "Von unten einschieben",
+        "slideInDown": "Von oben einschieben",
+        "popIn": "Einpoppen",
+        "zoomIn": "Heranzoomen",
+        "spinIn": "Drehend einblenden",
+        "bounceIn": "Hüpfend einblenden",
+        "fadeOut": "Ausblenden",
+        "slideOutLeft": "Nach links ausschieben",
+        "slideOutRight": "Nach rechts ausschieben",
+        "slideOutUp": "Nach oben ausschieben",
+        "slideOutDown": "Nach unten ausschieben",
+        "popOut": "Auspoppen",
+        "zoomOut": "Herauszoomen",
+        "pulse": "Pulsieren",
+        "shake": "Schütteln",
+        "wobble": "Wackeln",
+        "flash": "Blitzen",
+        "float": "Schweben",
+        "sway": "Schaukeln",
+        "breathe": "Atmen",
+        "spin": "Drehen",
+        "wiggle": "Zappeln"
+      }
+    },
     "shortcutsDialog": {
       "title": "Tastenkürzel",
       "description": "Tastenkürzel-Belegungen bearbeiten."

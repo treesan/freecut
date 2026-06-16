@@ -54,7 +54,7 @@ export const AnimateLayout = memo(function AnimateLayout({ project }: AnimateLay
           </ErrorBoundary>
         </div>
         <ErrorBoundary level="feature">
-          <AnimationPresetLibrary />
+          <AnimationPresetLibrary canvas={project} />
         </ErrorBoundary>
       </div>
     </div>
