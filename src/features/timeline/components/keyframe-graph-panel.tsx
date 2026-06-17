@@ -378,7 +378,10 @@ function loadKeyframeEditorMode(): KeyframeEditorMode {
   } catch {
     // ignore localStorage read errors
   }
-  return 'dopesheet'
+  // Default to the stacked split (dopesheet on top, value graph on bottom) for
+  // split-capable surfaces; non-split placements fall back to dopesheet via
+  // `effectiveEditorMode`.
+  return 'split'
 }
 
 interface AdvancedEasingControlsProps {
