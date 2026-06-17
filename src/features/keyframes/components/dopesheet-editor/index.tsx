@@ -2775,6 +2775,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
   // the two panes can't drift in position or appearance.
   const splitPlayheadOverlayElement = (
     <div
+      data-testid="dopesheet-playhead-clip"
       className="absolute right-0 bottom-0 overflow-hidden pointer-events-none z-30"
       style={{ left: timelineContentLeft, top: RULER_HEIGHT }}
     >
