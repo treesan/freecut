@@ -25,7 +25,7 @@ export function TimelinePreviewScrubber({
   const scrubberRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const lineRef = useRef<HTMLDivElement>(null)
-  const diamondRef = useRef<HTMLDivElement>(null)
+  const handleRef = useRef<HTMLDivElement>(null)
   const frameToPixelsRef = useRef(frameToPixels)
   const fpsRef = useRef(fps)
   const maxFrameRef = useRef(maxFrame)
@@ -96,7 +96,7 @@ export function TimelinePreviewScrubber({
           : isTrimEdit
             ? 'rgba(234, 179, 8, 0.7)'
             : 'rgba(255, 255, 255, 0.3)'
-      const diamondColor = isRazor
+      const handleColor = isRazor
         ? 'rgba(239, 68, 68, 0.8)'
         : isRateStretch
           ? 'rgba(168, 85, 247, 0.8)'
@@ -105,7 +105,7 @@ export function TimelinePreviewScrubber({
             : 'rgba(255, 255, 255, 0.4)'
 
       if (lineRef.current) lineRef.current.style.backgroundColor = lineColor
-      if (diamondRef.current) diamondRef.current.style.backgroundColor = diamondColor
+      if (handleRef.current) handleRef.current.style.backgroundColor = handleColor
     }
 
     updateColor(useSelectionStore.getState().activeTool)
@@ -128,23 +128,29 @@ export function TimelinePreviewScrubber({
         zIndex: 20,
       }}
     >
-      {/* Ghost line */}
-      <div ref={lineRef} className="absolute inset-0 bg-white/30" />
+      {/* Ghost line. In the ruler it starts below the flag (12px) so it doesn't
+          show through the translucent tab; in the tracks it spans full height. */}
+      <div
+        ref={lineRef}
+        className="absolute bg-white/30"
+        style={{ top: inRuler ? '12px' : 0, right: 0, bottom: 0, left: 0 }}
+      />
 
-      {/* Ruler area: diamond handle + time tooltip */}
+      {/* Ruler area: flag handle + time tooltip */}
       {inRuler && (
         <>
-          {/* Small diamond */}
+          {/* Flag tab — matches the real playhead's handle shape, but kept
+              translucent and tool-colored (set via ref) so the skim ghost stays
+              distinct from the solid playhead. */}
           <div
-            ref={diamondRef}
-            className="absolute bg-white/40"
+            ref={handleRef}
+            className="absolute rounded-b-[2px] bg-white/40"
             style={{
-              top: '-5px',
+              top: '0px',
               left: '50%',
               width: '8px',
-              height: '8px',
-              transform: 'translateX(-50%) rotate(45deg)',
-              transformOrigin: 'center',
+              height: '12px',
+              transform: 'translateX(-50%)',
             }}
           />
 

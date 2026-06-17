@@ -9,6 +9,7 @@ import {
 } from '@/features/editor/deps/timeline-utils'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { useSelectionStore } from '@/shared/state/selection'
+import { PlayheadMarks } from '@/shared/ui/playhead-marks'
 import type { TimelineItem, TimelineTrack } from '@/types/timeline'
 
 const LABEL_WIDTH = 32
@@ -106,8 +107,7 @@ const AnimateStripPlayhead = memo(function AnimateStripPlayhead({
       data-testid="animate-timeline-playhead"
       aria-hidden="true"
     >
-      <span className="absolute bottom-0 top-0 w-px -translate-x-1/2 bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.65)]" />
-      <span className="absolute left-0 top-0 h-3 w-2 -translate-x-1/2 rounded-b-[2px] border border-red-300/60 bg-red-500" />
+      <PlayheadMarks handle="flag" />
     </div>
   )
 })

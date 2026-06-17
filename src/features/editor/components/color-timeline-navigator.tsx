@@ -17,6 +17,7 @@ import {
 } from '@/features/editor/deps/timeline-utils'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { useSelectionStore } from '@/shared/state/selection'
+import { PlayheadMarks } from '@/shared/ui/playhead-marks'
 import { useGizmoStore } from '@/features/editor/deps/preview'
 import type { TimelineItem, TimelineTrack } from '@/types/timeline'
 import type { ProjectMarker } from '@/types/timeline'
@@ -190,9 +191,7 @@ const ColorTimelinePlayhead = memo(function ColorTimelinePlayhead({
       data-testid="color-timeline-playhead"
       aria-hidden="true"
     >
-      <span className="absolute bottom-0 top-0 w-px -translate-x-1/2 bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.65)]" />
-      <span className="absolute left-0 top-0 h-3.5 w-2.5 -translate-x-1/2 rounded-b-[2px] border border-red-300/60 bg-red-500 shadow-[0_0_7px_rgba(239,68,68,0.55)]" />
-      <span className="absolute left-0 top-3 h-0 w-0 -translate-x-1/2 border-x-[4px] border-t-[5px] border-x-transparent border-t-red-500" />
+      <PlayheadMarks handle="flag" pointer />
     </div>
   )
 })

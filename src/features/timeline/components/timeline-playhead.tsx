@@ -9,6 +9,7 @@ import { useSelectionStore } from '@/shared/state/selection'
 import { useTimelineZoomContext } from '../contexts/timeline-zoom-context'
 import { createScrubThrottleState, shouldCommitScrubFrame } from '../utils/scrub-throttle'
 import { withPerfMeasure, perfMarkRender } from '@/shared/logging/perf-marks'
+import { PlayheadMarks } from '@/shared/ui/playhead-marks'
 
 interface TimelinePlayheadProps {
   inRuler?: boolean // If true, shows diamond indicator for ruler
@@ -252,54 +253,31 @@ export function TimelinePlayhead({ inRuler = false, maxFrame }: TimelinePlayhead
       className="absolute top-0 bottom-0"
       style={{
         // left is set via ref subscription in useEffect (no re-renders during playback)
-        width: '2px',
         pointerEvents: 'none',
         zIndex: 9999,
       }}
     >
-      {/* Playhead line - visible and prominent */}
-      <div
-        className="absolute inset-0 bg-timeline-playhead pointer-events-none"
-        style={{
-          boxShadow: '0 0 8px color-mix(in oklch, var(--color-timeline-playhead) 50%, transparent)',
-        }}
-      />
+      {/* Shared line + (ruler-only) flag handle. */}
+      <PlayheadMarks handle={inRuler ? 'flag' : 'none'} />
 
-      {/* Diamond indicator in ruler - draggable handle */}
+      {/* Invisible larger hit area over the flag — draggable to scrub. */}
       {inRuler && (
-        <>
-          {/* Invisible larger hit area for diamond */}
-          <div
-            className="absolute"
-            style={{
-              top: '-12px',
-              left: '50%',
-              width: '20px',
-              height: '20px',
-              transform: 'translateX(-50%)',
-              cursor:
-                activeToolRef.current === 'razor' ? 'default' : isDragging ? 'grabbing' : 'default',
-              // Pass through pointer events in razor mode or during external drag operations
-              pointerEvents: activeToolRef.current === 'razor' || isExternalDrag ? 'none' : 'auto',
-              backgroundColor: 'transparent',
-            }}
-            onMouseDown={handleMouseDown}
-          />
-          {/* Visible diamond */}
-          <div
-            className="absolute bg-timeline-playhead pointer-events-none"
-            style={{
-              top: '-6px',
-              left: '50%',
-              width: '10px',
-              height: '10px',
-              boxShadow:
-                '0 0 8px color-mix(in oklch, var(--color-timeline-playhead) 50%, transparent)',
-              transform: 'translateX(-50%) rotate(45deg)',
-              transformOrigin: 'center',
-            }}
-          />
-        </>
+        <div
+          className="absolute"
+          style={{
+            top: '0px',
+            left: '0px',
+            width: '20px',
+            height: '20px',
+            transform: 'translateX(-50%)',
+            cursor:
+              activeToolRef.current === 'razor' ? 'default' : isDragging ? 'grabbing' : 'default',
+            // Pass through pointer events in razor mode or during external drag operations
+            pointerEvents: activeToolRef.current === 'razor' || isExternalDrag ? 'none' : 'auto',
+            backgroundColor: 'transparent',
+          }}
+          onMouseDown={handleMouseDown}
+        />
       )}
     </div>
   )
