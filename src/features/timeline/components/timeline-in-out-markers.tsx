@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef, useEffect, memo, forwardRef } from 'react
 import { useTimelineStore } from '../stores/timeline-store'
 import { useTimelineZoomContext } from '../contexts/timeline-zoom-context'
 import { usePlaybackStore } from '@/shared/state/playback'
+import { previewScrubberSuppressRef } from './preview-scrubber-suppress'
 
 // Matches the ruler's top IO lane height in timeline-markers.tsx.
 const IO_LANE_HEIGHT = 12
@@ -46,6 +47,9 @@ export const TimelineInOutMarkers = memo(function TimelineInOutMarkers() {
       const setter = handle === 'in' ? setInPointRef : setOutPointRef
       const prevCursor = document.body.style.cursor
       document.body.style.cursor = 'col-resize'
+      // Keep the preview canvas refreshing but pin the ghost skimmer so it
+      // doesn't chase the marker (matches the Color workspace IO drag).
+      previewScrubberSuppressRef.current = true
 
       const onMove = (ev: MouseEvent) => {
         const rect = container.getBoundingClientRect()
@@ -62,6 +66,7 @@ export const TimelineInOutMarkers = memo(function TimelineInOutMarkers() {
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', cleanup)
         document.body.style.cursor = prevCursor
+        previewScrubberSuppressRef.current = false
         usePlaybackStore.getState().setPreviewFrame(null)
         dragCleanupRef.current = null
       }

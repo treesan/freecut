@@ -4,6 +4,7 @@ import { useSelectionStore } from '@/shared/state/selection'
 import { useTimelineZoomContext } from '../contexts/timeline-zoom-context'
 import { formatTimecode } from '@/shared/utils/time-utils'
 import { IO_LANE_HEIGHT } from './timeline-markers'
+import { previewScrubberSuppressRef } from './preview-scrubber-suppress'
 
 // Playhead flag tab height (matches PlayheadMarks' h-3).
 const FLAG_HEIGHT = 12
@@ -45,7 +46,9 @@ export function TimelinePreviewScrubber({
     const updatePosition = (previewFrame: number | null) => {
       if (!scrubberRef.current) return
 
-      if (previewFrame === null) {
+      // Hidden during an IO-marker drag: the preview canvas still refreshes via
+      // `previewFrame`, but the ghost skimmer must not chase the marker.
+      if (previewFrame === null || previewScrubberSuppressRef.current) {
         scrubberRef.current.style.display = 'none'
         return
       }

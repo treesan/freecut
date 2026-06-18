@@ -11,6 +11,7 @@ import { perfMarkRender } from '@/shared/logging/perf-marks'
 // Components
 import { TimelineInOutMarkers } from './timeline-in-out-markers'
 import { TimelineProjectMarkers } from './timeline-project-markers'
+import { previewScrubberSuppressRef } from './preview-scrubber-suppress'
 import { useSettingsStore } from '@/features/timeline/deps/settings'
 
 // Utilities and hooks
@@ -913,6 +914,9 @@ export const TimelineMarkers = memo(function TimelineMarkers({
 
     const originalCursor = document.body.style.cursor
     document.body.style.cursor = 'move'
+    // Keep the preview canvas refreshing but pin the ghost skimmer so it doesn't
+    // chase the range as it slides (matches the Color workspace IO drag).
+    previewScrubberSuppressRef.current = true
 
     const handleMouseMove = (e: MouseEvent) => {
       const currentTimelineX = getTimelineXFromClientX(e.clientX)
@@ -954,6 +958,7 @@ export const TimelineMarkers = memo(function TimelineMarkers({
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
       document.body.style.cursor = originalCursor
+      previewScrubberSuppressRef.current = false
     }
   }, [isRangeDragging, getTimelineXFromClientX])
 
