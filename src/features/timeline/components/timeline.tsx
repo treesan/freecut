@@ -65,8 +65,18 @@ const logger = createLogger('Timeline')
  * the default track height so it doubles as a reset.
  */
 const TRACK_SIZE_OPTIONS = [
-  { id: 'compact', height: COMPACT_TRACK_HEIGHT, icon: Rows4, labelKey: 'timeline.trackSize.compact' },
-  { id: 'medium', height: DEFAULT_TRACK_HEIGHT, icon: Rows3, labelKey: 'timeline.trackSize.medium' },
+  {
+    id: 'compact',
+    height: COMPACT_TRACK_HEIGHT,
+    icon: Rows4,
+    labelKey: 'timeline.trackSize.compact',
+  },
+  {
+    id: 'medium',
+    height: DEFAULT_TRACK_HEIGHT,
+    icon: Rows3,
+    labelKey: 'timeline.trackSize.medium',
+  },
   { id: 'large', height: MAX_TRACK_HEIGHT, icon: Rows2, labelKey: 'timeline.trackSize.large' },
 ] as const
 
@@ -586,7 +596,6 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
           return
         }
       }
-
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -680,10 +689,12 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
       usePlaybackStore.getState().setPreviewFrame(null)
       useItemsStore.getState().setTracks(nextTracks)
 
-      useTimelineCommandStore.getState().addUndoEntry(
-        { type: 'RESIZE_ALL_TRACKS', payload: { count: nextTracks.length } },
-        beforeSnapshot,
-      )
+      useTimelineCommandStore
+        .getState()
+        .addUndoEntry(
+          { type: 'RESIZE_ALL_TRACKS', payload: { count: nextTracks.length } },
+          beforeSnapshot,
+        )
       useTimelineSettingsStore.getState().markDirty()
     },
     [setTrackSizePreset],

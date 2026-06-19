@@ -1536,7 +1536,8 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   // the strip only when there are actual controls to show, so the editor
   // reclaims that space the rest of the time.
   const showEasingControls = Boolean(
-    (showBezierControls && selectedBezierPoints) || (showSpringControls && selectedSpringParameters),
+    (showBezierControls && selectedBezierPoints) ||
+    (showSpringControls && selectedSpringParameters),
   )
   const advancedControlsKey = useMemo(
     () =>

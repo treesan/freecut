@@ -78,7 +78,10 @@ function getEditorWorkspaceLayoutSnapshot(state: EditorState): EditorWorkspaceLa
   }
 }
 
-function saveEditorWorkspaceLayout(workspace: EditorWorkspaceId, layout: EditorWorkspaceLayout): void {
+function saveEditorWorkspaceLayout(
+  workspace: EditorWorkspaceId,
+  layout: EditorWorkspaceLayout,
+): void {
   try {
     localStorage.setItem(workspaceLayoutStorageKey(workspace), JSON.stringify(layout))
   } catch {
