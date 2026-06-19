@@ -34,6 +34,69 @@ interface TransitionPreviewProps {
   className?: string
 }
 
+type PreviewDirection = WipeDirection | SlideDirection | FlipDirection | undefined
+
+/**
+ * Draw the transition through the real WebGPU shaders. Returns true on success,
+ * false when no GPU shader exists, the pipeline isn't ready, or the render is
+ * empty — in which case the caller should fall back to the Canvas 2D path.
+ */
+function tryDrawGpuTransitionPreview(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  frames: SampleFrames,
+  presentationId: string,
+  direction: PreviewDirection,
+  progress: number,
+): boolean {
+  const gpuId = transitionRegistry.getRenderer(presentationId)?.gpuTransitionId
+  if (!gpuId) return false
+  const pipeline = getReadyGpuTransitionPipeline()
+  if (!pipeline?.has(gpuId)) return false
+  const result = pipeline.render(
+    gpuId,
+    frames.a,
+    frames.b,
+    progress,
+    PREVIEW_WIDTH,
+    PREVIEW_HEIGHT,
+    direction,
+  )
+  if (!result) return false
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(result, 0, 0, canvas.width, canvas.height)
+  return true
+}
+
+/** Draw the transition through the renderer's Canvas 2D fallback path. */
+function drawCanvasTransitionPreview(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  frames: SampleFrames,
+  presentationId: string,
+  direction: PreviewDirection,
+  outRef: { current: OffscreenCanvas | null },
+  progress: number,
+): void {
+  const renderer = transitionRegistry.getRenderer(presentationId)
+  if (!renderer?.renderCanvas) return
+  const out = (outRef.current ??= new OffscreenCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT))
+  const outCtx = out.getContext('2d')
+  if (!outCtx) return
+  try {
+    outCtx.clearRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT)
+    renderer.renderCanvas(outCtx, frames.a, frames.b, progress, direction, {
+      width: PREVIEW_WIDTH,
+      height: PREVIEW_HEIGHT,
+    })
+  } catch (error) {
+    log.warn('renderCanvas failed for preview', { presentationId, error: String(error) })
+    return
+  }
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(out, 0, 0, canvas.width, canvas.height)
+}
+
 /**
  * A small canvas that previews a transition over two contrasting sample stills.
  * Shader-driven transitions render through the real WebGPU `TransitionPipeline`
@@ -62,46 +125,13 @@ export const TransitionPreview = memo(function TransitionPreview({
       const ctx = canvas.getContext('2d')
       if (!ctx) return
 
-      const renderer = transitionRegistry.getRenderer(presentationId)
-      const gpuId = renderer?.gpuTransitionId
-      const pipeline = gpuId ? getReadyGpuTransitionPipeline() : null
-
-      // Preferred path: the real WebGPU shaders, for accurate previews.
-      if (gpuId && pipeline?.has(gpuId)) {
-        const result = pipeline.render(
-          gpuId,
-          frames.a,
-          frames.b,
-          progress,
-          PREVIEW_WIDTH,
-          PREVIEW_HEIGHT,
-          direction,
-        )
-        if (result) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height)
-          ctx.drawImage(result, 0, 0, canvas.width, canvas.height)
-          return
-        }
-      }
-
-      // Fallback: the renderer's Canvas 2D path (geometric transitions, or GPU
+      // Preferred path: the real WebGPU shaders, for accurate previews. Falls
+      // back to the renderer's Canvas 2D path (geometric transitions, or GPU
       // not ready/unavailable).
-      if (!renderer?.renderCanvas) return
-      const out = (outRef.current ??= new OffscreenCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT))
-      const outCtx = out.getContext('2d')
-      if (!outCtx) return
-      try {
-        outCtx.clearRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT)
-        renderer.renderCanvas(outCtx, frames.a, frames.b, progress, direction, {
-          width: PREVIEW_WIDTH,
-          height: PREVIEW_HEIGHT,
-        })
-      } catch (error) {
-        log.warn('renderCanvas failed for preview', { presentationId, error: String(error) })
+      if (tryDrawGpuTransitionPreview(ctx, canvas, frames, presentationId, direction, progress)) {
         return
       }
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(out, 0, 0, canvas.width, canvas.height)
+      drawCanvasTransitionPreview(ctx, canvas, frames, presentationId, direction, outRef, progress)
     },
     [presentationId, direction],
   )

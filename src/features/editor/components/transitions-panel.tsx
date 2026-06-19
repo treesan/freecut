@@ -33,6 +33,20 @@ interface TransitionCardProps {
 }
 
 /**
+ * Resolve a transition card's visual mode from its config: the fallback icon,
+ * whether an animated A/B preview is available (GPU shader or Canvas 2D path),
+ * and the direction to preview.
+ */
+function resolveTransitionCardVisuals(config: PresentationConfig) {
+  const renderer = transitionRegistry.getRenderer(config.id)
+  return {
+    Icon: TRANSITION_ICON_MAP[config.icon] ?? Blend,
+    showPreview: !!(renderer?.gpuTransitionId || renderer?.renderCanvas),
+    previewDirection: config.direction ?? config.defaultDirection,
+  }
+}
+
+/**
  * Compact transition card - displays as a small clickable tile
  */
 const TransitionCard = memo(function TransitionCard({
@@ -43,11 +57,7 @@ const TransitionCard = memo(function TransitionCard({
   onDragStart,
   onDragEnd,
 }: TransitionCardProps) {
-  const Icon = TRANSITION_ICON_MAP[config.icon] ?? Blend
-  // Animated A/B preview when the renderer has a GPU shader or Canvas 2D path; static icon otherwise.
-  const renderer = transitionRegistry.getRenderer(config.id)
-  const showPreview = !!(renderer?.gpuTransitionId || renderer?.renderCanvas)
-  const previewDirection = config.direction ?? config.defaultDirection
+  const { Icon, showPreview, previewDirection } = resolveTransitionCardVisuals(config)
   const [hovered, setHovered] = useState(false)
 
   const handleClick = useCallback(() => {

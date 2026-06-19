@@ -257,6 +257,47 @@ function clearGlobalDragCursor(): void {
   document.body.classList.remove(...DRAG_CURSOR_CLASSES)
 }
 
+interface DraggedItemState {
+  id: string
+  initialFrame: number
+  initialTrackId: string
+}
+
+/**
+ * Resolve the full set of items a drag should move and their initial positions:
+ * expand the base selection (linked items when enabled, else the raw selection
+ * or the just-clicked clip), attach captions, drop locked items, and snapshot
+ * each survivor's starting frame + track.
+ */
+function resolveDraggedItemStates(
+  allItems: TimelineItem[],
+  currentTracks: TimelineTrack[],
+  currentSelectedIds: string[],
+  isInSelection: boolean,
+  linkedIds: string[],
+  linkedSelectionEnabled: boolean,
+): { baseItemsToDrag: string[]; draggableItemIds: string[]; draggedItems: DraggedItemState[] } {
+  const baseItemsToDrag = isInSelection
+    ? linkedSelectionEnabled
+      ? expandSelectionWithLinkedItems(allItems, currentSelectedIds)
+      : currentSelectedIds
+    : linkedIds
+  const itemsToDrag = expandItemIdsWithAttachedCaptions(allItems, baseItemsToDrag)
+  const draggableItemIds = filterUnlockedItemIds(allItems, currentTracks, itemsToDrag)
+  const draggedItems = draggableItemIds
+    .map((id) => {
+      const dragItem = allItems.find((i) => i.id === id)
+      if (!dragItem) return null
+      return {
+        id: dragItem.id,
+        initialFrame: dragItem.from,
+        initialTrackId: dragItem.trackId,
+      }
+    })
+    .filter((i): i is DraggedItemState => i !== null)
+  return { baseItemsToDrag, draggableItemIds, draggedItems }
+}
+
 /**
  * Timeline drag-and-drop hook - Phase 2 Enhanced
  *
@@ -625,34 +666,18 @@ export function useTimelineDrag(
         selectItems(linkedIds)
       }
 
-      // Determine which items to drag
-      const baseItemsToDrag = isInSelection
-        ? linkedSelectionEnabled
-          ? expandSelectionWithLinkedItems(allItems, currentSelectedIds)
-          : currentSelectedIds
-        : linkedIds
-      const itemsToDrag = expandItemIdsWithAttachedCaptions(allItems, baseItemsToDrag)
-      const draggableItemIds = filterUnlockedItemIds(allItems, currentTracks, itemsToDrag)
+      // Determine which items to drag and snapshot their initial positions
+      const { baseItemsToDrag, draggedItems } = resolveDraggedItemStates(
+        allItems,
+        currentTracks,
+        currentSelectedIds,
+        isInSelection,
+        linkedIds,
+        linkedSelectionEnabled,
+      )
       if (isInSelection && baseItemsToDrag.length !== currentSelectedIds.length) {
         selectItems(baseItemsToDrag)
       }
-
-      // Store initial state for all dragged items
-      const draggedItems = draggableItemIds
-        .map((id) => {
-          const dragItem = allItems.find((i) => i.id === id)
-          if (!dragItem) return null
-          return {
-            id: dragItem.id,
-            initialFrame: dragItem.from,
-            initialTrackId: dragItem.trackId,
-          }
-        })
-        .filter((i) => i !== null) as Array<{
-        id: string
-        initialFrame: number
-        initialTrackId: string
-      }>
 
       // Initialize drag state
       dragStateRef.current = {

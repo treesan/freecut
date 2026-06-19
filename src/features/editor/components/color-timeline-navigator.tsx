@@ -157,6 +157,41 @@ interface ColorFilmTileProps {
 }
 
 /**
+ * Prefer the clip's actual start frame; fall back to the import poster (or any
+ * stored thumbnail) so the tile shows real content immediately.
+ */
+function resolveColorTileBaseUrl(
+  startFrameUrl: string | null | undefined,
+  clip: ColorTimelineClip,
+  posterUrl: string | undefined,
+): string | undefined {
+  return startFrameUrl ?? clip.thumbnailUrl ?? posterUrl
+}
+
+/**
+ * Derive the tile's display thumbnail and grade indicators. The real GPU grade
+ * baked into the frame wins; until it lands (or when WebGPU is unavailable) the
+ * base frame shows with the CSS-approximation grade.
+ */
+function resolveColorTileVisuals(
+  clip: ColorTimelineClip,
+  baseUrl: string | undefined,
+  gradedUrl: string | undefined,
+) {
+  const hasGrade = clip.gradeThumbnail.hasGrade
+  const showCssGradeFallback = !gradedUrl && hasGrade
+  return {
+    thumbnailUrl: gradedUrl ?? baseUrl,
+    showCssGradeFallback,
+    imageGradeStyle: showCssGradeFallback ? clip.gradeThumbnail.imageStyle : undefined,
+    imageDataAttributes: {
+      'data-graded-thumbnail': hasGrade ? 'true' : undefined,
+      'data-grade-source': gradedUrl ? 'gpu' : hasGrade ? 'css' : undefined,
+    },
+  }
+}
+
+/**
  * Color film tile = the shared {@link MiniFilmTile} plus the baked GPU grade:
  * the real grade is rendered onto the start frame (debounced), falling back to
  * the CSS-approximation grade until it lands, with an RGB grade indicator.
@@ -170,18 +205,13 @@ const ColorFilmTile = memo(function ColorFilmTile({
   onSelect,
 }: ColorFilmTileProps) {
   const startFrameUrl = useClipStartFrameUrl(clip, fps)
-  // Prefer the clip's actual start frame; fall back to the import poster (or any
-  // stored thumbnail) so the tile shows real content immediately.
-  const baseUrl = startFrameUrl ?? clip.thumbnailUrl ?? posterUrl
+  const baseUrl = resolveColorTileBaseUrl(startFrameUrl, clip, posterUrl)
 
   const gradeInstances = useMemo(() => toGpuEffectInstances(clip.effects), [clip.effects])
   const gradedUrl = useGradedTileThumbnail(baseUrl, gradeInstances)
 
-  // Real GPU grade baked into the frame wins. Until it lands (or when WebGPU is
-  // unavailable) show the base frame with the CSS-approximation grade.
-  const thumbnailUrl = gradedUrl ?? baseUrl
-  const showCssGradeFallback = !gradedUrl && clip.gradeThumbnail.hasGrade
-  const imageGradeStyle = showCssGradeFallback ? clip.gradeThumbnail.imageStyle : undefined
+  const { thumbnailUrl, showCssGradeFallback, imageGradeStyle, imageDataAttributes } =
+    resolveColorTileVisuals(clip, baseUrl, gradedUrl)
 
   return (
     <MiniFilmTile
@@ -195,10 +225,7 @@ const ColorFilmTile = memo(function ColorFilmTile({
       testId={`${TEST_ID_PREFIX}-film-tile`}
       dataClipId={clip.id}
       imageStyle={imageGradeStyle}
-      imageDataAttributes={{
-        'data-graded-thumbnail': clip.gradeThumbnail.hasGrade ? 'true' : undefined,
-        'data-grade-source': gradedUrl ? 'gpu' : clip.gradeThumbnail.hasGrade ? 'css' : undefined,
-      }}
+      imageDataAttributes={imageDataAttributes}
       overlay={
         <>
           {showCssGradeFallback && clip.gradeThumbnail.overlayStyle ? (
