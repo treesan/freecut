@@ -206,12 +206,28 @@ class MediaTranscriptionService {
   })
   private activeJob: QueuedTranscriptionJob | null = null
   private queue: QueuedTranscriptionJob[] = []
+  private readonly transcriptChangeListeners = new Set<(mediaId: string) => void>()
 
   getTranscript = getTranscript
   getTranscriptMediaIds = getTranscriptMediaIds
 
+  /** Notifies subscribers when a media's stored transcript is created, replaced, or deleted. */
+  onTranscriptChanged(listener: (mediaId: string) => void): () => void {
+    this.transcriptChangeListeners.add(listener)
+    return () => {
+      this.transcriptChangeListeners.delete(listener)
+    }
+  }
+
+  private emitTranscriptChanged(mediaId: string): void {
+    for (const listener of this.transcriptChangeListeners) {
+      listener(mediaId)
+    }
+  }
+
   async deleteTranscript(mediaId: string): Promise<void> {
     await deleteTranscript(mediaId)
+    this.emitTranscriptChanged(mediaId)
   }
 
   async transcribeMedia(
@@ -443,6 +459,7 @@ class MediaTranscriptionService {
     }
 
     await saveTranscript(transcript)
+    this.emitTranscriptChanged(mediaId)
     logger.info('Saved transcript', {
       mediaId,
       segments: transcript.segments.length,

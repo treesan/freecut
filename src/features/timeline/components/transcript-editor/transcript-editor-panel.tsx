@@ -53,6 +53,9 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
   const [focusIndex, setFocusIndex] = useState(-1)
   const [query, setQuery] = useState('')
   const [matchCursor, setMatchCursor] = useState(0)
+  // Bumped when a stored transcript changes externally (e.g. deleted from the media
+  // library) to force the load effect to re-fetch instead of serving the stale cache.
+  const [refreshNonce, setRefreshNonce] = useState(0)
 
   const isSelectingRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -119,6 +122,23 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
     }
   }, [])
 
+  // Invalidate our cached transcript when the stored one changes elsewhere (deleted from
+  // the media library, or (re)generated). Drop it from the dedup set + local state and
+  // nudge the load effect so it re-fetches the current state instead of the stale copy.
+  useEffect(() => {
+    return mediaTranscriptionService.onTranscriptChanged((mediaId) => {
+      if (!requestedRef.current.has(mediaId)) return
+      requestedRef.current.delete(mediaId)
+      setMediaState((prev) => {
+        if (!(mediaId in prev)) return prev
+        const next = { ...prev }
+        delete next[mediaId]
+        return next
+      })
+      setRefreshNonce((nonce) => nonce + 1)
+    })
+  }, [])
+
   // Load transcripts for any selected media we haven't requested yet. Dedupe is
   // tracked in a ref so this effect never depends on `mediaState` — depending on
   // it would re-run the effect after the `loading` write and strand the fetch.
@@ -152,7 +172,7 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
         }
       }),
     )
-  }, [active, uniqueMediaIds])
+  }, [active, uniqueMediaIds, refreshNonce])
 
   // Keep the active word in view during playback.
   useEffect(() => {
