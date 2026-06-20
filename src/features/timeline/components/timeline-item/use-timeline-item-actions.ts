@@ -9,7 +9,6 @@ import { usePlaybackStore } from '@/shared/state/playback'
 import { useClearKeyframesDialogStore } from '@/shared/state/clear-keyframes-dialog'
 import { useTtsGenerateDialogStore } from '@/shared/state/tts-generate-dialog'
 import { getTextItemPlainText } from '@/shared/utils/text-item-spans'
-import { scheduleAfterPaint } from '@/shared/utils/schedule-after-paint'
 import {
   isTranscriptionCancellationError,
   isTranscriptionOutOfMemoryError,
@@ -310,9 +309,10 @@ export function useTimelineItemActions({
         }
       }
 
-      scheduleAfterPaint(() => {
-        void run()
-      })
+      // Start directly rather than via requestAnimationFrame: rAF is suspended while the
+      // tab is hidden/occluded, which would leave caption generation hung until the tab
+      // regained focus. Transcription runs in workers, so there's no paint to wait for.
+      void run()
     },
     [item.id, item.mediaId, item.type, isBroken],
   )

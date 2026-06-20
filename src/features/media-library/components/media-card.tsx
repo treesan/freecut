@@ -51,7 +51,6 @@ import {
   getTranscriptionOverallPercent,
   getTranscriptionStageLabel,
 } from '@/shared/utils/transcription-progress'
-import { scheduleAfterPaint } from '@/shared/utils/schedule-after-paint'
 import {
   isTranscriptionCancellationError,
   isTranscriptionOutOfMemoryError,
@@ -652,8 +651,12 @@ const MediaCardInternal = memo(function MediaCardInternal({
         store.setTranscriptProgress(t.id, { stage: 'queued', progress: 0 })
       }
 
-      scheduleAfterPaint(() => {
-        void (async () => {
+      // Start transcription directly rather than deferring via requestAnimationFrame.
+      // rAF is suspended while the tab is hidden/occluded, which left this path hung
+      // ("Generate Transcript" never starting) whenever the editor wasn't the foreground
+      // tab — the transcript-panel path works because it calls transcribeMedia directly.
+      void (async () => {
+        {
           let succeeded = 0
           let failed = 0
           let lastErrorMessage: string | null = null
@@ -729,8 +732,8 @@ const MediaCardInternal = memo(function MediaCardInternal({
           } else {
             setTranscribeDialogOpen(false)
           }
-        })()
-      })
+        }
+      })()
     },
     [getTargetMediaItems],
   )
