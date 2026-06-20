@@ -651,10 +651,15 @@ const MediaCardInternal = memo(function MediaCardInternal({
         store.setTranscriptProgress(t.id, { stage: 'queued', progress: 0 })
       }
 
-      // Start transcription directly rather than deferring via requestAnimationFrame.
-      // rAF is suspended while the tab is hidden/occluded, which left this path hung
-      // ("Generate Transcript" never starting) whenever the editor wasn't the foreground
-      // tab — the transcript-panel path works because it calls transcribeMedia directly.
+      // Close the dialog and transcribe in the background — exactly like the transcript
+      // panel, which just calls transcribeMedia and tracks status. Keeping the modal open
+      // during the job (animated spinner + backdrop forcing continuous compositing) while
+      // the WebGPU encoder runs in the media-library view deadlocked the renderer. We also
+      // intentionally do NOT mirror per-event onProgress into the global store here: the
+      // media card shows an indeterminate "transcribing" state from transcriptStatus alone,
+      // avoiding a re-render storm across every media card.
+      setTranscribeDialogOpen(false)
+
       void (async () => {
         {
           let succeeded = 0
@@ -669,16 +674,10 @@ const MediaCardInternal = memo(function MediaCardInternal({
                 quantization: values.quantization,
                 language: values.language || undefined,
                 onQueueStatusChange: (state) => {
-                  if (state === 'queued') {
-                    store.setTranscriptStatus(target.id, 'queued')
-                    store.setTranscriptProgress(target.id, { stage: 'queued', progress: 0 })
-                    return
-                  }
-                  store.setTranscriptStatus(target.id, 'transcribing')
-                  store.setTranscriptProgress(target.id, { stage: 'loading', progress: 0 })
-                },
-                onProgress: (progress) => {
-                  store.setTranscriptProgress(target.id, progress)
+                  store.setTranscriptStatus(
+                    target.id,
+                    state === 'queued' ? 'queued' : 'transcribing',
+                  )
                 },
               })
               store.setTranscriptStatus(target.id, 'ready')
