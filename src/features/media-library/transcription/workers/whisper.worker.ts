@@ -64,6 +64,8 @@ let port: MessagePort | null = null
 let language: string | undefined
 let pipelineReady = false
 let paused = false
+// Serializes init so a pre-warm init and the real job's init can't load concurrently.
+let initChain: Promise<void> = Promise.resolve()
 const queue: PCMChunk[] = []
 const recentWords: TranscriptWord[] = []
 let processing = false
@@ -100,9 +102,16 @@ self.onmessage = async (event: MessageEvent) => {
   }
 
   if (message.type === 'init') {
+    // Reset per-job state — the worker (and its compiled pipeline) is reused across jobs.
     language = message.language
     recentWords.length = 0
-    await initPipeline(message.modelId, message.quantization ?? 'hybrid')
+    queue.length = 0
+    processing = false
+    paused = false
+    initChain = initChain
+      .then(() => initPipeline(message.modelId, message.quantization ?? 'hybrid'))
+      .catch(() => {})
+    await initChain
     return
   }
 

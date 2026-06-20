@@ -49,6 +49,8 @@ let port: MessagePort | null = null
 let pipelineReady = false
 let paused = false
 let processing = false
+// Serializes init so a pre-warm init and the real job's init can't compile concurrently.
+let initChain: Promise<void> = Promise.resolve()
 const queue: PCMChunk[] = []
 const recentWords: TranscriptWord[] = []
 
@@ -88,7 +90,8 @@ self.onmessage = async (event: MessageEvent) => {
     queue.length = 0
     processing = false
     paused = false
-    await initPipeline()
+    initChain = initChain.then(() => initPipeline()).catch(() => {})
+    await initChain
     return
   }
 
