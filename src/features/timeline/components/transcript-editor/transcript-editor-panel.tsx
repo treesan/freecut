@@ -1,15 +1,23 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Captions,
   ChevronDown,
   ChevronUp,
   Copy,
-  EyeOff,
   Loader2,
   RotateCcw,
   Scissors,
   Search,
+  Trash2,
   Undo2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -44,14 +52,29 @@ import {
   type TranscriptToken,
 } from '../../utils/transcript-edit-model'
 import { isSpanIgnored } from '../../utils/source-range-intervals'
+import { findTranscriptWordMatches } from '../../utils/transcript-fuzzy'
 
 const logger = createLogger('TranscriptEditorPanel')
 
 type MediaStatus = 'loading' | 'ready' | 'needs' | 'error' | 'transcribing'
 type TranscriptScope = 'selection' | 'project'
 
-/** A same-clip pause longer than this (seconds) draws an edit-boundary marker. */
-const GAP_BOUNDARY_SECONDS = 0.4
+/** Pause (seconds) that starts a new transcript paragraph. */
+const PARAGRAPH_GAP_SECONDS = 0.6
+/** Soft/hard word caps so pause-less speech still breaks into readable blocks. */
+const SEGMENT_SOFT_MAX_WORDS = 38
+const SEGMENT_HARD_MAX_WORDS = 60
+
+/** Timeline seconds → compact `m:ss` (or `h:mm:ss`) timecode. */
+function formatTimecode(totalSeconds: number): string {
+  const whole = Math.max(0, Math.floor(totalSeconds))
+  const hours = Math.floor(whole / 3600)
+  const minutes = Math.floor((whole % 3600) / 60)
+  const seconds = whole % 60
+  const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes)
+  const ss = String(seconds).padStart(2, '0')
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
+}
 
 interface MediaEntry {
   status: MediaStatus
@@ -64,12 +87,61 @@ function hasWordTimings(
   return !!transcript && transcript.segments.some((segment) => (segment.words?.length ?? 0) > 0)
 }
 
-type BoundaryKind = 'none' | 'gap' | 'clip'
+/** A run of words rendered as one timestamped paragraph. */
+interface TranscriptSegment {
+  key: string
+  startFrame: number
+  startSeconds: number
+  firstIndex: number
+  lastIndex: number
+  indices: number[]
+  /** True when this paragraph opens a new source clip (draws a divider). */
+  isClipStart: boolean
+}
 
-function boundaryBetween(prev: TranscriptToken, current: TranscriptToken): BoundaryKind {
-  if (prev.itemId !== current.itemId) return 'clip'
-  if (current.sourceStart - prev.sourceEnd > GAP_BOUNDARY_SECONDS) return 'gap'
-  return 'none'
+const SENTENCE_END = /[.?!]["')\]]?$/
+
+/**
+ * Group the flat token stream into timestamped paragraphs. Breaks fall at clip
+ * changes and real pauses; soft/hard word caps keep pause-less speech from
+ * collapsing back into a wall.
+ */
+function buildSegments(
+  tokens: readonly TranscriptToken[],
+  timelineFps: number,
+): TranscriptSegment[] {
+  const segments: TranscriptSegment[] = []
+  let current: TranscriptSegment | null = null
+  let wordCount = 0
+
+  tokens.forEach((token, index) => {
+    const prev = index > 0 ? tokens[index - 1] : undefined
+    const clipChange = !!prev && prev.itemId !== token.itemId
+    const pause = !!prev && token.sourceStart - prev.sourceEnd >= PARAGRAPH_GAP_SECONDS
+    const sentenceWrap =
+      !!prev && wordCount >= SEGMENT_SOFT_MAX_WORDS && SENTENCE_END.test(prev.text)
+    const overflow = wordCount >= SEGMENT_HARD_MAX_WORDS
+
+    if (!current || clipChange || pause || sentenceWrap || overflow) {
+      current = {
+        key: token.key,
+        startFrame: token.startFrame,
+        startSeconds: token.startFrame / timelineFps,
+        firstIndex: index,
+        lastIndex: index,
+        indices: [index],
+        isClipStart: clipChange,
+      }
+      segments.push(current)
+      wordCount = 1
+    } else {
+      current.indices.push(index)
+      current.lastIndex = index
+      wordCount += 1
+    }
+  })
+
+  return segments
 }
 
 export interface TranscriptEditorPanelProps {
@@ -132,6 +204,8 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
     [tokens, currentFrame],
   )
 
+  const segments = useMemo(() => buildSegments(tokens, timelineFps), [tokens, timelineFps])
+
   const selectedSlice = useMemo(
     () => getSelectedTokenSlice(tokens, anchorIndex, focusIndex),
     [tokens, anchorIndex, focusIndex],
@@ -154,13 +228,17 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
   const ignoredSpanCount = useMemo(() => countIgnoredSpans(ignoreRanges), [ignoreRanges])
   const ignoredSeconds = useMemo(() => totalIgnoredSeconds(ignoreRanges), [ignoreRanges])
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const matchIndices = useMemo(() => {
-    if (!normalizedQuery) return [] as number[]
-    return tokens.flatMap((token, index) =>
-      token.text.toLowerCase().includes(normalizedQuery) ? [index] : [],
-    )
-  }, [tokens, normalizedQuery])
+  const hasQuery = query.trim().length > 0
+  const searchResult = useMemo(
+    () =>
+      findTranscriptWordMatches(
+        tokens.map((token) => token.text),
+        query,
+      ),
+    [tokens, query],
+  )
+  const matchIndices = searchResult.indices
+  const matchesApproximate = searchResult.approximate
 
   const matchKeys = useMemo(
     () => new Set(matchIndices.map((index) => tokens[index]?.key)),
@@ -257,23 +335,37 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
   }, [])
 
   const handlePointerDown = useCallback(
-    (index: number, shiftKey: boolean) => {
+    (index: number, event: ReactPointerEvent) => {
       const token = tokens[index]
       if (!token) return
-      if (shiftKey && anchorIndex >= 0) {
+      if (event.shiftKey && anchorIndex >= 0) {
         setFocusIndex(index)
       } else {
         isSelectingRef.current = true
         setAnchorIndex(index)
         setFocusIndex(index)
       }
+      // Capture the pointer so the drag keeps extending even when the cursor
+      // outruns the words or strays into padding/gaps — pointermove then routes
+      // here regardless of what's under the cursor.
+      scrollRef.current?.setPointerCapture(event.pointerId)
       seekToToken(token.startFrame)
     },
     [tokens, anchorIndex, seekToToken],
   )
 
-  const handlePointerEnter = useCallback((index: number) => {
-    if (isSelectingRef.current) setFocusIndex(index)
+  // Drag-extend by hit-testing the word under the cursor on every move. This is
+  // far smoother than per-span onPointerEnter (which skips words on fast drags
+  // and stalls over any non-word pixel). setFocusIndex bails out when the index
+  // is unchanged, so this only re-renders on an actual word boundary crossing.
+  const handlePointerMove = useCallback((event: ReactPointerEvent) => {
+    if (!isSelectingRef.current) return
+    const el = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-token-index]')
+    if (!el) return
+    const index = Number(el.dataset.tokenIndex)
+    if (Number.isInteger(index)) setFocusIndex(index)
   }, [])
 
   // Non-destructive: striking words stages them as "ignored" (restorable) rather
@@ -307,7 +399,9 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
 
       const count = selectedSlice.length
       if (!cut) {
-        toast.success(t('transcript.toastCopied', { defaultValue: 'Copied {{count}} words', count }))
+        toast.success(
+          t('transcript.toastCopied', { defaultValue: 'Copied {{count}} words', count }),
+        )
         return
       }
 
@@ -507,9 +601,17 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
             className="h-8 pl-7 text-xs"
           />
         </div>
-        {normalizedQuery.length > 0 && (
+        {hasQuery && (
           <div className="flex items-center gap-1">
-            <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+            <span
+              className="w-12 text-right text-xs tabular-nums text-muted-foreground"
+              data-tooltip={
+                matchesApproximate
+                  ? t('transcript.approxMatches', { defaultValue: 'Approximate matches' })
+                  : undefined
+              }
+            >
+              {matchesApproximate && matchIndices.length > 0 ? '~' : ''}
               {matchIndices.length}
             </span>
             <Button
@@ -545,7 +647,11 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
       </div>
 
       {/* Transcript body */}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div
+        ref={scrollRef}
+        onPointerMove={handlePointerMove}
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
+      >
         {transcriptableItems.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <Captions className="h-8 w-8 text-muted-foreground/60" />
@@ -572,49 +678,79 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
             {t('transcript.loading')}
           </div>
         ) : (
-          <p className="select-none text-sm leading-7">
-            {tokens.map((token, index) => {
-              const prev = index > 0 ? tokens[index - 1] : undefined
-              const boundary = prev ? boundaryBetween(prev, token) : 'none'
-              const isActive = index === activeIndex
-              const isSelected = selectedKeys.has(token.key)
-              const isMatch = matchKeys.has(token.key)
-              const isIgnored = ignoredKeys.has(token.key)
+          <div className="mx-auto max-w-[62ch] select-none">
+            {segments.map((segment) => {
               return (
-                <Fragment key={token.key}>
-                  {boundary !== 'none' && <EditBoundaryMarker kind={boundary} t={t} />}
-                  <span
-                    data-token-key={token.key}
-                    onPointerDown={(event) => handlePointerDown(index, event.shiftKey)}
-                    onPointerEnter={() => handlePointerEnter(index)}
-                    className={cn(
-                      'cursor-pointer rounded px-0.5 transition-colors duration-100',
-                      isSelected
-                        ? 'bg-primary text-primary-foreground'
-                        : isActive
-                          ? 'bg-yellow-300 font-semibold text-neutral-900 shadow-sm'
-                          : isMatch
-                            ? 'text-foreground ring-1 ring-inset ring-amber-500/70'
-                            : 'text-foreground hover:bg-secondary/60',
-                      isIgnored && 'line-through decoration-from-font opacity-45',
-                    )}
-                  >
-                    {token.text}{' '}
-                  </span>
+                <Fragment key={segment.key}>
+                  {segment.isClipStart && (
+                    <div className="flex items-center gap-2 pt-4 pb-1 first:pt-0" aria-hidden>
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        {t('transcript.boundaryClip', { defaultValue: 'New clip' })}
+                      </span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                  <div className="group grid grid-cols-[3rem_1fr] gap-x-3 py-1.5">
+                    <button
+                      type="button"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => seekToToken(segment.startFrame)}
+                      aria-label={t('transcript.jumpTo', {
+                        defaultValue: 'Jump to {{time}}',
+                        time: formatTimecode(segment.startSeconds),
+                      })}
+                      className="mt-px h-fit select-none rounded text-right font-mono text-[11px] tabular-nums leading-7 text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                    >
+                      {formatTimecode(segment.startSeconds)}
+                    </button>
+                    <p className="text-[13px] leading-7">
+                      {segment.indices.map((index) => {
+                        const token = tokens[index]
+                        if (!token) return null
+                        const isActive = index === activeIndex
+                        const isSelected = selectedKeys.has(token.key)
+                        const isMatch = matchKeys.has(token.key)
+                        const isIgnored = ignoredKeys.has(token.key)
+                        return (
+                          <span
+                            key={token.key}
+                            data-token-key={token.key}
+                            data-token-index={index}
+                            onPointerDown={(event) => handlePointerDown(index, event)}
+                            className={cn(
+                              'cursor-text rounded px-0.5',
+                              isSelected
+                                ? 'bg-primary text-primary-foreground'
+                                : isActive
+                                  ? 'bg-yellow-300 text-neutral-900 shadow-sm'
+                                  : isMatch
+                                    ? matchesApproximate
+                                      ? 'text-foreground ring-1 ring-inset ring-amber-500/40'
+                                      : 'text-foreground ring-1 ring-inset ring-amber-500/70'
+                                    : 'text-foreground/85 hover:bg-secondary/60 hover:text-foreground',
+                              isIgnored && 'line-through decoration-from-font opacity-45',
+                            )}
+                          >
+                            {token.text}{' '}
+                          </span>
+                        )
+                      })}
+                    </p>
+                  </div>
                 </Fragment>
               )
             })}
-          </p>
+          </div>
         )}
       </div>
 
       {/* Pending edits bar */}
       {ignoredSpanCount > 0 && (
         <div className="flex items-center justify-between gap-2 border-t border-border bg-secondary/30 px-2 py-1.5">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <EyeOff className="h-3.5 w-3.5" />
+          <span className="text-xs font-medium text-foreground">
             {t('transcript.pendingHidden', {
-              defaultValue: '{{count}} hidden · {{seconds}}s',
+              defaultValue: '{{count}} marked for deletion · {{seconds}}s',
               count: ignoredSpanCount,
               seconds: ignoredSeconds.toFixed(1),
             })}
@@ -630,8 +766,8 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
               {t('transcript.restoreAll', { defaultValue: 'Restore all' })}
             </Button>
             <Button size="sm" className="h-7 gap-1.5" onClick={handleApply}>
-              <Scissors className="h-3.5 w-3.5" />
-              {t('transcript.applyEdits', { defaultValue: 'Apply edits' })}
+              <Trash2 className="h-3.5 w-3.5" />
+              {t('transcript.applyEdits', { defaultValue: 'Delete marked' })}
             </Button>
           </div>
         </div>
@@ -643,7 +779,7 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
           {selectionCount > 0
             ? t('transcript.wordsSelected', { count: selectionCount })
             : t('transcript.ignoreHint', {
-                defaultValue: 'Select words, then Backspace to hide them',
+                defaultValue: 'Select words, then Backspace to mark them for deletion',
               })}
         </span>
         <div className="flex items-center gap-1.5">
@@ -672,18 +808,18 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
           </Button>
           <Button
             size="sm"
-            variant={selectionAllIgnored ? 'secondary' : 'default'}
+            variant="secondary"
             onClick={handleIgnoreToggle}
             disabled={selectionCount === 0}
           >
             {selectionAllIgnored ? (
               <Undo2 className="mr-1.5 h-3.5 w-3.5" />
             ) : (
-              <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
             )}
             {selectionAllIgnored
               ? t('transcript.restoreSelection', { defaultValue: 'Restore' })
-              : t('transcript.ignoreSelection', { defaultValue: 'Hide words' })}
+              : t('transcript.ignoreSelection', { defaultValue: 'Mark for delete' })}
           </Button>
         </div>
       </div>
@@ -722,28 +858,5 @@ function ScopeToggle({
         </button>
       ))}
     </div>
-  )
-}
-
-function EditBoundaryMarker({
-  kind,
-  t,
-}: {
-  kind: Exclude<BoundaryKind, 'none'>
-  t: (key: string, options?: Record<string, unknown>) => string
-}) {
-  const label =
-    kind === 'clip'
-      ? t('transcript.boundaryClip', { defaultValue: 'Clip boundary' })
-      : t('transcript.boundaryGap', { defaultValue: 'Pause' })
-  return (
-    <span
-      aria-label={label}
-      title={label}
-      className={cn(
-        'mx-0.5 inline-block w-px align-middle',
-        kind === 'clip' ? 'h-3.5 bg-primary/50' : 'h-2.5 bg-border',
-      )}
-    />
   )
 }
