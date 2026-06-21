@@ -28,6 +28,7 @@ import { createLogger } from '@/shared/logging/logger'
 import { useSelectionStore } from '@/shared/state/selection'
 import { usePlaybackStore } from '@/shared/state/playback'
 import { useClipboardStore } from '@/shared/state/clipboard'
+import { useEditorStore } from '@/shared/state/editor'
 import type { MediaTranscript } from '@/types/storage'
 import { useItemsStore } from '../../stores/items-store'
 import { useTimelineSettingsStore } from '../../stores/timeline-settings-store'
@@ -158,6 +159,7 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
   const currentFrame = usePlaybackStore((s) => s.currentFrame)
   const isPlaying = usePlaybackStore((s) => s.isPlaying)
   const ignoreRanges = useTranscriptIgnoreStore((s) => s.ranges)
+  const setTranscriptShortcutScope = useEditorStore((s) => s.setTranscriptEditorShortcutScopeActive)
 
   const [scope, setScope] = useState<TranscriptScope>('selection')
   const [mediaState, setMediaState] = useState<Record<string, MediaEntry>>({})
@@ -169,12 +171,24 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
   // library) to force the load effect to re-fetch instead of serving the stale cache.
   const [refreshNonce, setRefreshNonce] = useState(0)
 
+  const [pointerWithin, setPointerWithin] = useState(false)
+  const [focusWithin, setFocusWithin] = useState(false)
+
   const isSelectingRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   // mediaIds we've already kicked off a load for — keeps the load effect from
   // depending on `mediaState` (which would re-run it and cancel its own fetch).
   const requestedRef = useRef<Set<string>>(new Set())
   const mountedRef = useRef(true)
+
+  // Own Delete/Backspace whenever the pointer or focus is inside the panel, so
+  // the timeline's clip-delete shortcut yields to us (see use-editing-shortcuts).
+  useEffect(() => {
+    setTranscriptShortcutScope(active && (pointerWithin || focusWithin))
+  }, [active, pointerWithin, focusWithin, setTranscriptShortcutScope])
+
+  useEffect(() => () => setTranscriptShortcutScope(false), [setTranscriptShortcutScope])
 
   const transcriptableItems = useMemo(() => {
     if (scope === 'project') {
@@ -353,6 +367,9 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
         setAnchorIndex(index)
         setFocusIndex(index)
       }
+      // Focus the panel so Delete/Backspace land on our handler (which marks the
+      // selection) instead of leaking to the timeline.
+      rootRef.current?.focus({ preventScroll: true })
       // Capture the pointer so the drag keeps extending even when the cursor
       // outruns the words or strays into padding/gaps — pointermove then routes
       // here regardless of what's under the cursor.
@@ -513,13 +530,22 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      // Never hijack typing in the search box (or any input that bubbles here).
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (selectedKeys.size === 0) return
+        // Always own these so they never fall through to the timeline's clip
+        // delete — even with no selection (then it's simply a no-op).
         event.preventDefault()
-        handleIgnoreToggle()
+        event.stopPropagation()
+        if (selectedKeys.size > 0) handleIgnoreToggle()
       } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
         if (ignoredSpanCount === 0) return
         event.preventDefault()
+        event.stopPropagation()
         handleApply()
       } else if (event.key === 'Escape') {
         setAnchorIndex(-1)
@@ -579,9 +605,18 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
 
   return (
     <div
+      ref={rootRef}
       className="flex h-full flex-col outline-none"
       tabIndex={-1}
       onKeyDown={handleKeyDown}
+      onPointerEnter={() => setPointerWithin(true)}
+      onPointerLeave={() => setPointerWithin(false)}
+      onFocus={() => setFocusWithin(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setFocusWithin(false)
+        }
+      }}
       role="region"
       aria-label={t('transcript.title')}
     >
