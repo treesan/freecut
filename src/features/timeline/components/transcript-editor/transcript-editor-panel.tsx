@@ -282,6 +282,11 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
   // depending on `mediaState` (which would re-run it and cancel its own fetch).
   const requestedRef = useRef<Set<string>>(new Set())
   const mountedRef = useRef(true)
+  // Mirror anchorIndex so handlePointerDown can read it without listing it as a
+  // dependency — otherwise every selection click swaps the callback reference and
+  // re-renders all TranscriptSegmentRows, defeating their React.memo.
+  const anchorIndexRef = useRef(anchorIndex)
+  anchorIndexRef.current = anchorIndex
 
   // Own Delete/Backspace whenever the pointer or focus is inside the panel, so
   // the timeline's clip-delete shortcut yields to us (see use-editing-shortcuts).
@@ -462,7 +467,7 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
     (index: number, event: ReactPointerEvent) => {
       const token = tokens[index]
       if (!token) return
-      if (event.shiftKey && anchorIndex >= 0) {
+      if (event.shiftKey && anchorIndexRef.current >= 0) {
         setFocusIndex(index)
       } else {
         isSelectingRef.current = true
@@ -478,7 +483,7 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
       scrollRef.current?.setPointerCapture(event.pointerId)
       seekToToken(token.startFrame)
     },
-    [tokens, anchorIndex, seekToToken],
+    [tokens, seekToToken],
   )
 
   // Drag-extend by hit-testing the word under the cursor on every move. This is
