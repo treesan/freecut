@@ -6,6 +6,7 @@
     "searchPlaceholder": "搜索字幕稿",
     "nextMatch": "下一个匹配",
     "previousMatch": "上一个匹配",
+    "clearSearch": "清除搜索",
     "noTranscript": "此片段尚无字幕稿。",
     "generate": "生成字幕稿",
     "transcribing": "转写中…",

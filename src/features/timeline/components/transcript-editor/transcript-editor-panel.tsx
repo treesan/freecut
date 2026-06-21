@@ -19,6 +19,7 @@ import {
   Search,
   Trash2,
   Undo2,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -642,8 +643,21 @@ export function TranscriptEditorPanel({ active }: TranscriptEditorPanelProps) {
               }
             }}
             placeholder={t('transcript.searchPlaceholder')}
-            className="h-8 pl-7 text-xs"
+            className={cn('h-8 pl-7 text-xs', query.length > 0 && 'pr-7')}
           />
+          {query.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('')
+                setMatchCursor(0)
+              }}
+              aria-label={t('transcript.clearSearch', { defaultValue: 'Clear search' })}
+              className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         {hasQuery && (
           <div className="flex items-center gap-1">

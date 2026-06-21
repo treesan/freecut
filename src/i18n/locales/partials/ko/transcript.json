@@ -6,6 +6,7 @@
     "searchPlaceholder": "전사 검색",
     "nextMatch": "다음 일치",
     "previousMatch": "이전 일치",
+    "clearSearch": "검색 지우기",
     "noTranscript": "이 클립에는 아직 전사가 없습니다.",
     "generate": "전사 생성",
     "transcribing": "전사 중…",

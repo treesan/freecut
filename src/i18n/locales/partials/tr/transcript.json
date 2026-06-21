@@ -6,6 +6,7 @@
     "searchPlaceholder": "Transkriptte ara",
     "nextMatch": "Sonraki eşleşme",
     "previousMatch": "Önceki eşleşme",
+    "clearSearch": "Aramayı temizle",
     "noTranscript": "Bu klibin henüz transkripti yok.",
     "generate": "Transkript oluştur",
     "transcribing": "Yazıya dökülüyor…",

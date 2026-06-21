@@ -6,6 +6,7 @@
     "searchPlaceholder": "Transkript durchsuchen",
     "nextMatch": "Nächster Treffer",
     "previousMatch": "Vorheriger Treffer",
+    "clearSearch": "Suche löschen",
     "noTranscript": "Dieser Clip hat noch kein Transkript.",
     "generate": "Transkript erstellen",
     "transcribing": "Transkribieren…",

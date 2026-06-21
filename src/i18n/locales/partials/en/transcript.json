@@ -6,6 +6,7 @@
     "searchPlaceholder": "Search transcript",
     "nextMatch": "Next match",
     "previousMatch": "Previous match",
+    "clearSearch": "Clear search",
     "noTranscript": "This clip has no transcript yet.",
     "generate": "Generate transcript",
     "transcribing": "Transcribing…",

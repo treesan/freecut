@@ -6,6 +6,7 @@
     "searchPlaceholder": "Rechercher dans la transcription",
     "nextMatch": "Résultat suivant",
     "previousMatch": "Résultat précédent",
+    "clearSearch": "Effacer la recherche",
     "noTranscript": "Ce clip n’a pas encore de transcription.",
     "generate": "Générer la transcription",
     "transcribing": "Transcription…",

@@ -6,6 +6,7 @@
     "searchPlaceholder": "文字起こしを検索",
     "nextMatch": "次の一致",
     "previousMatch": "前の一致",
+    "clearSearch": "検索をクリア",
     "noTranscript": "このクリップにはまだ文字起こしがありません。",
     "generate": "文字起こしを生成",
     "transcribing": "文字起こし中…",
