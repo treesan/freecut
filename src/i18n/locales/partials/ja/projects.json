@@ -226,7 +226,13 @@
       "size": "サイズ:",
       "mediaFiles": "メディアファイル:",
       "timeTaken": "所要時間:",
-      "download": "ダウンロード"
+      "download": "ダウンロード",
+      "refsExportSuccess": "プロジェクトがパス参照として正常にエクスポートされました。",
+      "opfsSpilloverNote": "一部のメディアが隣接する .media/ ディレクトリにコピーされました",
+      "formatJson": "パス参照 (.freecut.json)",
+      "formatJsonDesc": "軽量 — ディスク上のメディアを参照",
+      "stripPaths": "ローカルパスを非表示",
+      "stripPathsInfo": "絶対パスは省略されます。受信者はインポートダイアログでメディアを探す必要があります。"
     },
     "import": {
       "invalidFile": "有効な{{extension}}ファイルを選択してください",

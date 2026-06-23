@@ -226,7 +226,13 @@
       "size": "크기:",
       "mediaFiles": "미디어 파일:",
       "timeTaken": "소요 시간:",
-      "download": "다운로드"
+      "download": "다운로드",
+      "refsExportSuccess": "프로젝트가 경로 참조로 성공적으로 내보내기되었습니다.",
+      "opfsSpilloverNote": "일부 미디어가 인접한 .media/ 디렉토리에 복사되었습니다",
+      "formatJson": "경로 참조 (.freecut.json)",
+      "formatJsonDesc": "경량 — 디스크의 미디어를 참조",
+      "stripPaths": "로컬 경로 숨기기",
+      "stripPathsInfo": "절대 경로가 생략됩니다. 수신자는 가져오기 대화상자로 미디어를 찾아야 합니다."
     },
     "import": {
       "invalidFile": "유효한 {{extension}} 파일을 선택하세요",

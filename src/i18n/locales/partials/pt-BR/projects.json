@@ -226,7 +226,13 @@
       "size": "Tamanho:",
       "mediaFiles": "Arquivos de mídia:",
       "timeTaken": "Tempo gasto:",
-      "download": "Baixar"
+      "download": "Baixar",
+      "refsExportSuccess": "Projeto exportado como referências de caminho com sucesso.",
+      "opfsSpilloverNote": "Alguma mídia foi copiada para um diretório .media/ adjacente",
+      "formatJson": "Referências de caminho (.freecut.json)",
+      "formatJsonDesc": "Leve — referencia mídia no disco",
+      "stripPaths": "Ocultar caminhos locais",
+      "stripPathsInfo": "Caminhos absolutos serão omitidos. Destinatários precisarão localizar a mídia pelo diálogo de importação."
     },
     "import": {
       "invalidFile": "Selecione um arquivo {{extension}} válido",

@@ -297,7 +297,13 @@
       "size": "Boyut:",
       "mediaFiles": "Medya dosyaları:",
       "timeTaken": "Geçen süre:",
-      "download": "İndir"
+      "download": "İndir",
+      "refsExportSuccess": "Proje yol referansları olarak başarıyla dışa aktarıldı.",
+      "opfsSpilloverNote": "Bazı medyalar bitişik .media/ dizinine kopyalandı",
+      "formatJson": "Yol referansları (.freecut.json)",
+      "formatJsonDesc": "Hafif — diskteki medyaya referans verir",
+      "stripPaths": "Yerel yolları gizle",
+      "stripPathsInfo": "Mutlak yollar atlanacaktır. Alıcıların içe aktarma ile medyayı bulması gerekir."
     },
     "import": {
       "invalidFile": "Lütfen geçerli bir {{extension}} dosyası seçin",

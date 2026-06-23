@@ -58,7 +58,8 @@
     "saveAria": "Projekt speichern",
     "export": "Exportieren",
     "exportVideo": "Video exportieren",
-    "downloadProjectZip": "Projekt herunterladen (.zip)"
+    "downloadProjectZip": "Projekt herunterladen (.zip)",
+    "exportProjectJson": "Projekt exportieren (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "Nicht gespeicherte Änderungen",
@@ -74,7 +75,8 @@
       "general": "Allgemein",
       "timeline": "Zeitleiste",
       "ai": "KI",
-      "storage": "Speicher"
+      "storage": "Speicher",
+      "authorizedFolders": "Autorisierte Ordner"
     },
     "general": {
       "autoSave": "Automatisches Speichern",
@@ -159,6 +161,13 @@
       "couldntProcessItems_one": "{{action}}: couldn't process {{count}} item{{detail}}",
       "couldntProcessItems_other": "{{action}}: couldn't process {{count}} items{{detail}}",
       "partialOutcome": "{{action}}: {{succeeded}}/{{total}} done. Needs attention: {{failed}}."
+    },
+    "authorizedFolders": {
+      "title": "Autorisierte Ordner",
+      "description": "Ordner, denen Sie während des .freecut.json-Imports Zugriff gewährt haben. Widerrufen betrifft nicht bereits importierte Medien.",
+      "emptyState": "Keine autorisierten Ordner. Sie werden automatisch beim Import eines .freecut.json-Projekts hinzugefügt.",
+      "revoke": "Widerrufen",
+      "rename": "Umbenennen"
     }
   }
 }

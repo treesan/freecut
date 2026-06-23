@@ -226,7 +226,13 @@
       "size": "大小：",
       "mediaFiles": "媒体文件：",
       "timeTaken": "所用时间：",
-      "download": "下载"
+      "download": "下载",
+      "refsExportSuccess": "项目已成功导出为路径引用格式。",
+      "opfsSpilloverNote": "部分媒体已复制到同级 .media/ 目录",
+      "formatJson": "路径引用 (.freecut.json)",
+      "formatJsonDesc": "轻量级 — 引用磁盘上的媒体",
+      "stripPaths": "隐藏本地路径",
+      "stripPathsInfo": "将省略绝对路径。接收者需要通过导入对话框定位媒体。"
     },
     "import": {
       "invalidFile": "请选择有效的 {{extension}} 文件",

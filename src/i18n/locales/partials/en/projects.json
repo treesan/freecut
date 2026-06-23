@@ -226,7 +226,13 @@
       "size": "Size:",
       "mediaFiles": "Media files:",
       "timeTaken": "Time taken:",
-      "download": "Download"
+      "download": "Download",
+      "refsExportSuccess": "Project exported as path-references successfully.",
+      "opfsSpilloverNote": "Some media was copied to a sibling .media/ directory",
+      "formatJson": "Path-references (.freecut.json)",
+      "formatJsonDesc": "Lightweight — references media on disk",
+      "stripPaths": "Hide local paths",
+      "stripPathsInfo": "Absolute paths will be omitted. Recipients will need to locate media using the import dialog."
     },
     "import": {
       "invalidFile": "Please select a valid {{extension}} file",

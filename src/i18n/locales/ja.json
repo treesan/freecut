@@ -58,7 +58,8 @@
     "saveAria": "プロジェクトを保存",
     "export": "書き出し",
     "exportVideo": "動画を書き出し",
-    "downloadProjectZip": "プロジェクトをダウンロード (.zip)"
+    "downloadProjectZip": "プロジェクトをダウンロード (.zip)",
+    "exportProjectJson": "プロジェクトをエクスポート (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "未保存の変更",
@@ -74,7 +75,8 @@
       "general": "一般",
       "timeline": "タイムライン",
       "ai": "AI",
-      "storage": "ストレージ"
+      "storage": "ストレージ",
+      "authorizedFolders": "許可フォルダ"
     },
     "general": {
       "autoSave": "自動保存",
@@ -159,6 +161,13 @@
       "couldntProcessItems_one": "{{action}}: couldn't process {{count}} item{{detail}}",
       "couldntProcessItems_other": "{{action}}: couldn't process {{count}} items{{detail}}",
       "partialOutcome": "{{action}}: {{succeeded}}/{{total}} done. Needs attention: {{failed}}."
+    },
+    "authorizedFolders": {
+      "title": "許可フォルダ",
+      "description": ".freecut.json のインポート時にアクセスを許可したフォルダ。取り消しても、既にインポートされたメディアには影響しません。",
+      "emptyState": "許可フォルダはまだありません。.freecut.json プロジェクトのインポート時に自動的に追加されます。",
+      "revoke": "取り消し",
+      "rename": "名前変更"
     }
   }
 }

@@ -58,7 +58,8 @@
     "saveAria": "保存项目",
     "export": "导出",
     "exportVideo": "导出视频",
-    "downloadProjectZip": "下载项目 (.zip)"
+    "downloadProjectZip": "下载项目 (.zip)",
+    "exportProjectJson": "导出项目 (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "未保存的更改",
@@ -74,7 +75,8 @@
       "general": "常规",
       "timeline": "时间线",
       "ai": "AI",
-      "storage": "存储"
+      "storage": "存储",
+      "authorizedFolders": "已授权文件夹"
     },
     "general": {
       "autoSave": "自动保存",
@@ -159,6 +161,13 @@
       "couldntProcessItems_one": "{{action}}: couldn't process {{count}} item{{detail}}",
       "couldntProcessItems_other": "{{action}}: couldn't process {{count}} items{{detail}}",
       "partialOutcome": "{{action}}: {{succeeded}}/{{total}} done. Needs attention: {{failed}}."
+    },
+    "authorizedFolders": {
+      "title": "已授权文件夹",
+      "description": "您在导入 .freecut.json 时授予访问权限的文件夹。撤销不会影响已导入的媒体。",
+      "emptyState": "暂无已授权文件夹。导入 .freecut.json 项目时会自动添加。",
+      "revoke": "撤销",
+      "rename": "重命名"
     }
   }
 }

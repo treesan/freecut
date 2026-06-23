@@ -58,7 +58,8 @@
     "saveAria": "Guardar proyecto",
     "export": "Exportar",
     "exportVideo": "Exportar vídeo",
-    "downloadProjectZip": "Descargar proyecto (.zip)"
+    "downloadProjectZip": "Descargar proyecto (.zip)",
+    "exportProjectJson": "Exportar proyecto (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "Cambios sin guardar",
@@ -74,7 +75,8 @@
       "general": "General",
       "timeline": "Línea de tiempo",
       "ai": "IA",
-      "storage": "Almacenamiento"
+      "storage": "Almacenamiento",
+      "authorizedFolders": "Carpetas autorizadas"
     },
     "general": {
       "autoSave": "Guardado automático",
@@ -159,6 +161,13 @@
       "couldntProcessItems_one": "{{action}}: couldn't process {{count}} item{{detail}}",
       "couldntProcessItems_other": "{{action}}: couldn't process {{count}} items{{detail}}",
       "partialOutcome": "{{action}}: {{succeeded}}/{{total}} done. Needs attention: {{failed}}."
+    },
+    "authorizedFolders": {
+      "title": "Carpetas autorizadas",
+      "description": "Carpetas a las que otorgaste acceso durante la importación de .freecut.json. Revocar no afecta los medios ya importados.",
+      "emptyState": "Sin carpetas autorizadas. Se añaden automáticamente al importar un proyecto .freecut.json.",
+      "revoke": "Revocar",
+      "rename": "Renombrar"
     }
   }
 }

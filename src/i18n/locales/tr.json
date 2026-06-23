@@ -58,7 +58,8 @@
     "saveAria": "Projeyi kaydet",
     "export": "Dışa Aktar",
     "exportVideo": "Videoyu Dışa Aktar",
-    "downloadProjectZip": "Projeyi İndir (.zip)"
+    "downloadProjectZip": "Projeyi İndir (.zip)",
+    "exportProjectJson": "Projeyi Dışa Aktar (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "Kaydedilmemiş Değişiklikler",
@@ -74,7 +75,8 @@
       "general": "Genel",
       "timeline": "Zaman Çizelgesi",
       "ai": "YZ",
-      "storage": "Depolama"
+      "storage": "Depolama",
+      "authorizedFolders": "Yetkili Klasörler"
     },
     "general": {
       "autoSave": "Otomatik kaydet",
@@ -159,6 +161,13 @@
       "actionClearCache": "Önbelleği temizle",
       "actionRegenerateThumbnails": "Küçük resimleri yeniden oluştur",
       "actionDeleteProxies": "Proxy'leri sil"
+    },
+    "authorizedFolders": {
+      "title": "Yetkili Klasörler",
+      "description": ".freecut.json içe aktarımı sırasında erişim izni verdiğiniz klasörler. İptal etmek zaten içe aktarılmış medyayı etkilemez.",
+      "emptyState": "Henüz yetkili klasör yok. Bir .freecut.json projesini içe aktarırken otomatik olarak eklenir.",
+      "revoke": "İptal et",
+      "rename": "Yeniden adlandır"
     }
   }
 }

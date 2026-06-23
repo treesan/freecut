@@ -58,7 +58,8 @@
     "saveAria": "Save project",
     "export": "Export",
     "exportVideo": "Export Video",
-    "downloadProjectZip": "Download Project (.zip)"
+    "downloadProjectZip": "Download Project (.zip)",
+    "exportProjectJson": "Export Project (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "Unsaved Changes",
@@ -74,7 +75,8 @@
       "general": "General",
       "timeline": "Timeline",
       "ai": "AI",
-      "storage": "Storage"
+      "storage": "Storage",
+      "authorizedFolders": "Authorized Folders"
     },
     "general": {
       "autoSave": "Auto-save",
@@ -159,6 +161,13 @@
       "actionClearCache": "Clear cache",
       "actionRegenerateThumbnails": "Regenerate thumbnails",
       "actionDeleteProxies": "Delete proxies"
+    },
+    "authorizedFolders": {
+      "title": "Authorized Folders",
+      "description": "Folders you granted access to during .freecut.json import. Revoking does not affect media already imported.",
+      "emptyState": "No authorized folders yet. They are added automatically when you import a .freecut.json project.",
+      "revoke": "Revoke",
+      "rename": "Rename"
     }
   }
 }

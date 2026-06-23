@@ -226,7 +226,13 @@
       "size": "Größe:",
       "mediaFiles": "Mediendateien:",
       "timeTaken": "Benötigte Zeit:",
-      "download": "Herunterladen"
+      "download": "Herunterladen",
+      "refsExportSuccess": "Projekt erfolgreich als Pfadreferenzen exportiert.",
+      "opfsSpilloverNote": "Einige Medien wurden in ein benachbartes .media/-Verzeichnis kopiert",
+      "formatJson": "Pfadreferenzen (.freecut.json)",
+      "formatJsonDesc": "Leichtgewichtig — verweist auf Medien auf der Festplatte",
+      "stripPaths": "Lokale Pfade ausblenden",
+      "stripPathsInfo": "Absolute Pfade werden weggelassen. Empfänger müssen Medien über den Import-Dialog lokalisieren."
     },
     "import": {
       "invalidFile": "Bitte wähle eine gültige {{extension}}-Datei",

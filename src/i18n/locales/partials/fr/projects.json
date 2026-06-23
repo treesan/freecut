@@ -226,7 +226,13 @@
       "size": "Taille :",
       "mediaFiles": "Fichiers multimédias :",
       "timeTaken": "Temps écoulé :",
-      "download": "Télécharger"
+      "download": "Télécharger",
+      "refsExportSuccess": "Projet exporté en références de chemin avec succès.",
+      "opfsSpilloverNote": "Certains médias ont été copiés dans un répertoire .media/ adjacent",
+      "formatJson": "Références de chemin (.freecut.json)",
+      "formatJsonDesc": "Léger — référence les médias sur le disque",
+      "stripPaths": "Masquer les chemins locaux",
+      "stripPathsInfo": "Les chemins absolus seront omis. Les destinataires devront localiser les médias via le dialogue d'importation."
     },
     "import": {
       "invalidFile": "Veuillez sélectionner un fichier {{extension}} valide",

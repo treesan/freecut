@@ -226,7 +226,13 @@
       "size": "Tamaño:",
       "mediaFiles": "Archivos multimedia:",
       "timeTaken": "Tiempo empleado:",
-      "download": "Descargar"
+      "download": "Descargar",
+      "refsExportSuccess": "Proyecto exportado como referencias de ruta exitosamente.",
+      "opfsSpilloverNote": "Algunos medios se copiaron a un directorio .media/ adyacente",
+      "formatJson": "Referencias de ruta (.freecut.json)",
+      "formatJsonDesc": "Ligero — referencia medios en disco",
+      "stripPaths": "Ocultar rutas locales",
+      "stripPathsInfo": "Se omitirán las rutas absolutas. Los destinatarios necesitarán localizar los medios con el diálogo de importación."
     },
     "import": {
       "invalidFile": "Selecciona un archivo {{extension}} válido",

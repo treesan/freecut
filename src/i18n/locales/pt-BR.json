@@ -58,7 +58,8 @@
     "saveAria": "Salvar projeto",
     "export": "Exportar",
     "exportVideo": "Exportar vídeo",
-    "downloadProjectZip": "Baixar projeto (.zip)"
+    "downloadProjectZip": "Baixar projeto (.zip)",
+    "exportProjectJson": "Exportar projeto (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "Alterações não salvas",
@@ -74,7 +75,8 @@
       "general": "Geral",
       "timeline": "Linha do tempo",
       "ai": "IA",
-      "storage": "Armazenamento"
+      "storage": "Armazenamento",
+      "authorizedFolders": "Pastas autorizadas"
     },
     "general": {
       "autoSave": "Salvamento automático",
@@ -159,6 +161,13 @@
       "couldntProcessItems_one": "{{action}}: couldn't process {{count}} item{{detail}}",
       "couldntProcessItems_other": "{{action}}: couldn't process {{count}} items{{detail}}",
       "partialOutcome": "{{action}}: {{succeeded}}/{{total}} done. Needs attention: {{failed}}."
+    },
+    "authorizedFolders": {
+      "title": "Pastas autorizadas",
+      "description": "Pastas às quais você concedeu acesso durante a importação .freecut.json. Revogar não afeta mídia já importada.",
+      "emptyState": "Nenhuma pasta autorizada. Elas são adicionadas automaticamente ao importar um projeto .freecut.json.",
+      "revoke": "Revogar",
+      "rename": "Renomear"
     }
   }
 }

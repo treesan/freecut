@@ -58,7 +58,8 @@
     "saveAria": "Enregistrer le projet",
     "export": "Exporter",
     "exportVideo": "Exporter la vidéo",
-    "downloadProjectZip": "Télécharger le projet (.zip)"
+    "downloadProjectZip": "Télécharger le projet (.zip)",
+    "exportProjectJson": "Exporter le projet (.freecut.json)"
   },
   "unsavedChanges": {
     "title": "Modifications non enregistrées",
@@ -74,7 +75,8 @@
       "general": "Général",
       "timeline": "Montage",
       "ai": "IA",
-      "storage": "Stockage"
+      "storage": "Stockage",
+      "authorizedFolders": "Dossiers autorisés"
     },
     "general": {
       "autoSave": "Enregistrement automatique",
@@ -159,6 +161,13 @@
       "couldntProcessItems_one": "{{action}}: couldn't process {{count}} item{{detail}}",
       "couldntProcessItems_other": "{{action}}: couldn't process {{count}} items{{detail}}",
       "partialOutcome": "{{action}}: {{succeeded}}/{{total}} done. Needs attention: {{failed}}."
+    },
+    "authorizedFolders": {
+      "title": "Dossiers autorisés",
+      "description": "Dossiers auxquels vous avez accordé l'accès lors de l'importation .freecut.json. La révocation n'affecte pas les médias déjà importés.",
+      "emptyState": "Aucun dossier autorisé. Ils sont ajoutés automatiquement lors de l'importation d'un projet .freecut.json.",
+      "revoke": "Révoquer",
+      "rename": "Renommer"
     }
   }
 }
