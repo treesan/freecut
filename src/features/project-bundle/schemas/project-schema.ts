@@ -570,7 +570,11 @@ const timelineSchema = z
 const projectResolutionSchema = z.object({
   width: z.number().int().min(320).max(7680),
   height: z.number().int().min(240).max(4320),
-  fps: z.number().int().min(1).max(240),
+  // Accept fractional NTSC/pal fps (23.976, 29.97, 59.94, 119.88…) — external
+  // exporters like video-use carry the source file's native fps verbatim.
+  // normalizeMetadata() clamps the range; it does not round, so we must not
+  // require an integer here.
+  fps: z.number().min(1).max(240),
   backgroundColor: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
@@ -581,7 +585,7 @@ const projectResolutionSchema = z.object({
 // Project Schema
 // ============================================================================
 
-const projectSchema = z
+export const projectSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1).max(100),

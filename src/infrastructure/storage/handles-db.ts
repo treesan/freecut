@@ -22,7 +22,7 @@ const HANDLES_DB_NAME = 'freecut-handles-db'
 const HANDLES_DB_VERSION = 1
 const HANDLES_STORE = 'handles'
 
-export type HandleKind = 'workspace' | 'media' | 'project-folder'
+export type HandleKind = 'workspace' | 'media' | 'project-folder' | 'authorized-root'
 
 export interface HandleRecord {
   /** Compound id: `${kind}:${id}`. */
@@ -56,7 +56,7 @@ type HandlesDBInstance = IDBPDatabase<HandlesDBSchema>
 
 let dbPromise: Promise<HandlesDBInstance> | null = null
 
-function getHandlesDB(): Promise<HandlesDBInstance> {
+export function getHandlesDB(): Promise<HandlesDBInstance> {
   if (!dbPromise) {
     dbPromise = openDB<HandlesDBSchema>(HANDLES_DB_NAME, HANDLES_DB_VERSION, {
       upgrade(db) {
@@ -105,7 +105,7 @@ export async function deleteHandle(kind: HandleKind, id: string): Promise<void> 
   await db.delete(HANDLES_STORE, compoundKey(kind, id))
 }
 
-async function listHandlesByKind(kind: HandleKind): Promise<HandleRecord[]> {
+export async function listHandlesByKind(kind: HandleKind): Promise<HandleRecord[]> {
   const db = await getHandlesDB()
   return db.getAllFromIndex(HANDLES_STORE, 'kind', kind)
 }

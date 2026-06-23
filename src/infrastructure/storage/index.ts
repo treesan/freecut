@@ -185,3 +185,14 @@ export {
   type AnimationPreset,
   type AnimationPresetProperty,
 } from '@/infrastructure/storage/workspace-fs/animation-presets'
+
+// Authorized directory roots (persisted FileSystemDirectoryHandle grants)
+export {
+  listAuthorizedRoots,
+  addAuthorizedRoot,
+  removeAuthorizedRoot,
+  touchAuthorizedRoot,
+  renameAuthorizedRoot,
+  ensureRootPermission,
+  type AuthorizedRoot,
+} from '@/infrastructure/storage/authorized-roots'
