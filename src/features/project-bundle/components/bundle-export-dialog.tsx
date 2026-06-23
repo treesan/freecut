@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -19,13 +19,17 @@ import {
   HardDrive,
   FileVideo,
   Download,
+  FileJson,
+  Info,
 } from 'lucide-react'
 import type { ExportProgress, ExportResult } from '../types/bundle'
+import type { RefsExportResult } from '../types/refs'
 import {
   exportProjectBundle,
   exportProjectBundleStreaming,
   downloadBundle,
 } from '../services/bundle-export-service'
+import { exportProjectAsRefs } from '../services/refs-export-service'
 import { formatDuration } from '@/shared/utils/time-utils'
 import { formatBytes } from '@/shared/utils/format-utils'
 
@@ -36,9 +40,14 @@ export interface BundleExportDialogProps {
   onBeforeExport?: () => Promise<void>
   /** Pre-acquired file handle for streaming export (avoids native picker inside modal) */
   fileHandle?: FileSystemFileHandle
+  /** Pre-acquired directory handle for refs (.freecut.json) export (avoids native picker inside modal) */
+  dirHandle?: FileSystemDirectoryHandle
+  /** Pre-select format and skip the format-selection screen. */
+  defaultFormat?: ExportFormat
 }
 
-type ExportStatus = 'idle' | 'saving' | 'exporting' | 'completed' | 'failed'
+type ExportStatus = 'idle' | 'selecting-format' | 'saving' | 'exporting' | 'completed' | 'failed'
+type ExportFormat = 'zip' | 'json'
 
 function getStageLabel(stage: ExportProgress['stage'], t: (key: string) => string): string {
   switch (stage) {
@@ -61,16 +70,25 @@ export function BundleExportDialog({
   projectId,
   onBeforeExport,
   fileHandle,
+  dirHandle,
+  defaultFormat,
 }: BundleExportDialogProps) {
   const { t } = useTranslation()
   const [status, setStatus] = useState<ExportStatus>('idle')
+  const [format, setFormat] = useState<ExportFormat>('json')
+  const [stripPaths, setStripPaths] = useState(false)
   const [progress, setProgress] = useState<ExportProgress>({ percent: 0, stage: 'collecting' })
   const [result, setResult] = useState<ExportResult | null>(null)
+  const [refsResult, setRefsResult] = useState<RefsExportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [startTime, setStartTime] = useState<number | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  // Guards against double-invoking the export when the auto-show effect and a
+  // status transition both fire startExport.
+  const exportStartedRef = useRef(false)
 
   const isExporting = status === 'saving' || status === 'exporting'
+  const isSelectingFormat = status === 'selecting-format'
   const isCompleted = status === 'completed'
   const isFailed = status === 'failed'
   const preventClose = isExporting || isCompleted
@@ -99,59 +117,103 @@ export function BundleExportDialog({
     return () => clearInterval(interval)
   }, [startTime, isExporting])
 
-  // Start export when dialog opens
-  const startExport = useCallback(async () => {
-    setStatus('saving')
-    setError(null)
-    setResult(null)
-    setProgress({ percent: 0, stage: 'collecting' })
+  // Start export for the given format. Takes the format as an argument so the
+  // auto-show effect can kick it off without reading stale `format` state.
+  const startExport = useCallback(
+    async (fmt: ExportFormat) => {
+      setError(null)
+      setResult(null)
+      setRefsResult(null)
+      setProgress({ percent: 0, stage: 'collecting' })
+      setStatus('saving')
 
-    try {
-      // Save project first if callback provided
-      if (onBeforeExport) {
-        await onBeforeExport()
+      try {
+        // Save project first if callback provided
+        if (onBeforeExport) {
+          await onBeforeExport()
+        }
+
+        setStatus('exporting')
+
+        if (fmt === 'json') {
+          // Refs export: use the pre-acquired directory handle when available
+          // (avoids opening the native picker from inside the modal dialog,
+          // which conflicts with Radix focus handling). Fall back to the picker
+          // for the manual format-selection flow.
+          let destDir = dirHandle
+          if (!destDir) {
+            destDir = await window.showDirectoryPicker({
+              id: 'freecut-export-refs',
+              mode: 'readwrite',
+              startIn: 'documents',
+            })
+          }
+
+          const refsExportResult = await exportProjectAsRefs(projectId, destDir, {
+            stripPaths,
+            prettyPrint: true,
+          })
+          setRefsResult(refsExportResult)
+        } else {
+          // Bundle export (existing path)
+          let exportResult: ExportResult
+
+          if (fileHandle) {
+            exportResult = await exportProjectBundleStreaming(projectId, fileHandle, (p) => {
+              setProgress(p)
+            })
+          } else {
+            exportResult = await exportProjectBundle(projectId, (p) => {
+              setProgress(p)
+            })
+          }
+
+          setResult(exportResult)
+        }
+
+        setStatus('completed')
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // User cancelled directory picker — go back to format selection
+          exportStartedRef.current = false
+          setStatus('selecting-format')
+          return
+        }
+        setError(err instanceof Error ? err.message : t('projects.bundleExport.exportFailed'))
+        setStatus('failed')
       }
+    },
+    [projectId, onBeforeExport, fileHandle, dirHandle, t, stripPaths],
+  )
 
-      setStatus('exporting')
-
-      let exportResult: ExportResult
-
-      if (fileHandle) {
-        // Streaming path: write directly to the pre-acquired file handle
-        exportResult = await exportProjectBundleStreaming(projectId, fileHandle, (p) => {
-          setProgress(p)
-        })
-      } else {
-        // Fallback: in-memory export
-        exportResult = await exportProjectBundle(projectId, (p) => {
-          setProgress(p)
-        })
-      }
-
-      setResult(exportResult)
-      setStatus('completed')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('projects.bundleExport.exportFailed'))
-      setStatus('failed')
-    }
-  }, [projectId, onBeforeExport, fileHandle, t])
-
-  // Auto-start export when dialog opens
+  // Auto-show format selection when dialog opens, or kick off the export
+  // immediately when a defaultFormat is provided.
   useEffect(() => {
-    if (open && status === 'idle') {
-      startExport()
+    if (!open || status !== 'idle') return
+    if (defaultFormat) {
+      setFormat(defaultFormat)
+      if (!exportStartedRef.current) {
+        exportStartedRef.current = true
+        void startExport(defaultFormat)
+      }
+    } else {
+      setStatus('selecting-format')
     }
-  }, [open, status, startExport])
+  }, [open, status, defaultFormat, startExport])
 
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
       setStatus('idle')
+      setFormat('json')
+      setStripPaths(false)
       setProgress({ percent: 0, stage: 'collecting' })
       setResult(null)
+      setRefsResult(null)
       setError(null)
       setStartTime(null)
       setElapsedSeconds(0)
+      exportStartedRef.current = false
     }
   }, [open])
 
@@ -192,7 +254,7 @@ export function BundleExportDialog({
           <DialogDescription>
             {isExporting && t('projects.bundleExport.creatingBundle')}
             {isCompleted &&
-              (usedStreaming
+              (refsResult || usedStreaming
                 ? t('projects.bundleExport.bundleSavedDescription')
                 : t('projects.bundleExport.bundleReadyDescription'))}
             {isFailed && t('projects.bundleExport.somethingWentWrong')}
@@ -200,6 +262,78 @@ export function BundleExportDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4 overflow-hidden">
+          {/* Format selection */}
+          {isSelectingFormat && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {/* JSON format option */}
+                <button
+                  type="button"
+                  onClick={() => setFormat('json')}
+                  className={`flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-colors ${
+                    format === 'json'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <FileJson className="h-5 w-5" />
+                    <span className="font-medium">{t('projects.bundleExport.formatJson')}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {t('projects.bundleExport.formatJsonDesc')}
+                  </span>
+                </button>
+
+                {/* ZIP format option */}
+                <button
+                  type="button"
+                  onClick={() => setFormat('zip')}
+                  className={`flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-colors ${
+                    format === 'zip'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <FolderArchive className="h-5 w-5" />
+                    <span className="font-medium">{t('projects.bundleExport.formatZip')}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {t('projects.bundleExport.formatZipDesc')}
+                  </span>
+                </button>
+              </div>
+
+              {/* Strip paths checkbox (JSON only) */}
+              {format === 'json' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="strip-paths"
+                      checked={stripPaths}
+                      onChange={(e) => setStripPaths(e.target.checked)}
+                      className="w-4 h-4 rounded border-border accent-primary"
+                    />
+                    <label htmlFor="strip-paths" className="text-sm cursor-pointer">
+                      {t('projects.bundleExport.stripPaths')}
+                    </label>
+                  </div>
+
+                  {stripPaths && (
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        {t('projects.bundleExport.stripPathsInfo')}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Progress section */}
           {isExporting && (
             <div className="space-y-4 min-w-0">
@@ -245,7 +379,7 @@ export function BundleExportDialog({
             </div>
           )}
 
-          {/* Success state */}
+          {/* Success state (zip) */}
           {isCompleted && result && (
             <div className="space-y-4">
               <Alert className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
@@ -290,6 +424,43 @@ export function BundleExportDialog({
             </div>
           )}
 
+          {/* Success state (refs/JSON) */}
+          {isCompleted && refsResult && (
+            <div className="space-y-4">
+              <Alert className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-700 dark:text-green-400">
+                  {t('projects.bundleExport.refsExportSuccess')}
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <FileJson className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">{t('projects.bundleExport.file')}</span>
+                  <span className="font-medium truncate">{refsResult.filename}</span>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileVideo className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      {t('projects.bundleExport.mediaFiles')}
+                    </span>
+                    <span className="font-medium">{refsResult.mediaCount}</span>
+                  </div>
+                  {refsResult.opfsSpillover && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Info className="h-4 w-4 text-yellow-500" />
+                      <span className="text-muted-foreground">
+                        {t('projects.bundleExport.opfsSpilloverNote')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Error state */}
           {isFailed && error && (
             <Alert variant="destructive">
@@ -301,12 +472,23 @@ export function BundleExportDialog({
 
         {/* Actions */}
         <div className="flex justify-end gap-2">
+          {isSelectingFormat && (
+            <>
+              <Button variant="outline" onClick={onClose}>
+                {t('common.close')}
+              </Button>
+              <Button onClick={() => startExport(format)}>
+                {t('projects.bundleExport.startExport')}
+              </Button>
+            </>
+          )}
+
           {isCompleted && (
             <>
               <Button variant="outline" onClick={onClose}>
                 {t('common.close')}
               </Button>
-              {!usedStreaming && (
+              {result && !usedStreaming && (
                 <Button onClick={handleDownload}>
                   <Download className="mr-2 h-4 w-4" />
                   {t('projects.bundleExport.download')}

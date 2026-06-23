@@ -33,6 +33,7 @@ import {
   Rows3,
   HardDrive,
   Sparkles,
+  FolderLock,
 } from 'lucide-react'
 import {
   LocalInferenceUnloadControl,
@@ -59,6 +60,7 @@ import { clearPreviewAudioCache } from '@/features/editor/deps/composition-runti
 import { CAPTION_STYLE_PRESETS } from '@/shared/typography/caption-style-presets'
 import { createLogger } from '@/shared/logging/logger'
 import { cn } from '@/shared/ui/cn'
+import { AuthorizedFoldersList } from '@/features/settings/components/authorized-folders-list'
 
 const log = createLogger('SettingsDialog')
 
@@ -67,6 +69,7 @@ const SETTINGS_SECTIONS = [
   { id: 'timeline', labelKey: 'settings.sections.timeline', icon: Rows3 },
   { id: 'ai', labelKey: 'settings.sections.ai', icon: Sparkles },
   { id: 'storage', labelKey: 'settings.sections.storage', icon: HardDrive },
+  { id: 'authorized', labelKey: 'settings.sections.authorizedFolders', icon: FolderLock },
 ] as const
 
 const ESTIMATE_REFERENCE_DURATION_SEC = 60
@@ -931,6 +934,19 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     <LocalInferenceUnloadControl />
                     <LocalModelCacheControl />
                   </div>
+                </div>
+              )}
+
+              {/* Authorized Folders Section */}
+              {activeSection === 'authorized' && (
+                <div className="space-y-6">
+                  <div className="space-y-1">
+                    <Label className="text-sm">{t('settings.authorizedFolders.title')}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.authorizedFolders.description')}
+                    </p>
+                  </div>
+                  <AuthorizedFoldersList />
                 </div>
               )}
             </div>

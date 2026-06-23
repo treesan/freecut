@@ -330,6 +330,9 @@ export const LoadedEditor = memo(function LoadedEditor({
     (s) => s.jobs.filter((j) => j.status === 'queued' || j.status === 'rendering').length,
   )
   const [bundleFileHandle, setBundleFileHandle] = useState<FileSystemFileHandle | undefined>()
+  const [bundleDirHandle, setBundleDirHandle] = useState<FileSystemDirectoryHandle | undefined>()
+  const [bundleExportDefaultFormat, setBundleExportDefaultFormat] = useState<'zip' | 'json' | undefined>(undefined)
+
   const editorDensity = useSettingsStore((s) => s.editorDensity)
   const snapEnabledPreference = useSettingsStore((s) => s.snapEnabled)
   const editorLayout = getEditorLayout(editorDensity)
@@ -554,6 +557,34 @@ export const LoadedEditor = memo(function LoadedEditor({
     setExportDialogOpen(true)
   }, [])
 
+  const handleExportRefs = useCallback(async () => {
+    usePlaybackStore.getState().pause()
+    void preloadBundleExportDialog()
+
+    // Acquire the destination directory BEFORE opening the modal dialog to
+    // avoid focus-loss conflicts between the native directory picker and the
+    // Radix Dialog (same reason showSaveFilePicker is called up-front for ZIP).
+    if (typeof window.showDirectoryPicker === 'function') {
+      try {
+        const dirHandle = await window.showDirectoryPicker({
+          id: 'freecut-export-refs',
+          mode: 'readwrite',
+          startIn: 'documents',
+        })
+        setBundleDirHandle(dirHandle)
+      } catch {
+        // User cancelled the picker — don't open the dialog
+        return
+      }
+    } else {
+      setBundleDirHandle(undefined)
+    }
+
+    setBundleFileHandle(undefined)
+    setBundleExportDefaultFormat('json')
+    setBundleExportDialogOpen(true)
+  }, [])
+
   const handleOpenRenderQueue = useCallback(() => {
     void importExportsDialog()
     setRenderQueueOpen(true)
@@ -588,6 +619,7 @@ export const LoadedEditor = memo(function LoadedEditor({
       setBundleFileHandle(undefined)
     }
 
+    setBundleExportDefaultFormat('zip')
     setBundleExportDialogOpen(true)
   }, [project.name])
 
@@ -632,6 +664,7 @@ export const LoadedEditor = memo(function LoadedEditor({
           onSave={handleSave}
           onExport={handleExport}
           onExportBundle={handleExportBundle}
+          onExportRefs={handleExportRefs}
           onOpenRenderQueue={handleOpenRenderQueue}
           renderQueueCount={renderQueueActiveCount}
         />
@@ -768,10 +801,14 @@ export const LoadedEditor = memo(function LoadedEditor({
             onClose={() => {
               setBundleExportDialogOpen(false)
               setBundleFileHandle(undefined)
+              setBundleDirHandle(undefined)
+              setBundleExportDefaultFormat(undefined)
             }}
             projectId={projectId}
             onBeforeExport={handleSave}
             fileHandle={bundleFileHandle}
+            dirHandle={bundleDirHandle}
+            defaultFormat={bundleExportDefaultFormat}
           />
         )}
       </Suspense>

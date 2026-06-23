@@ -6,7 +6,7 @@ import { createLogger } from '@/shared/logging/logger'
 
 const logger = createLogger('ProjectsIndex')
 import { Button } from '@/components/ui/button'
-import { Plus, Upload, FolderOpen, File, Github, BookOpen } from 'lucide-react'
+import { Plus, Upload, FolderOpen, File, Github, BookOpen, FileJson } from 'lucide-react'
 import { FreeCutLogo } from '@/components/brand/freecut-logo'
 import { ProjectList } from '@/features/projects/components/project-list'
 import { EditProjectForm } from '@/features/projects/components/project-form'
@@ -31,6 +31,7 @@ import type { Project } from '@/types/project'
 import type { ProjectFormData } from '@/features/projects/utils/validation'
 import type { ImportProgress } from '@/features/project-bundle/types/bundle'
 import { BUNDLE_EXTENSION } from '@/features/project-bundle/types/bundle'
+import { REFS_EXTENSION } from '@/features/project-bundle/types/refs'
 import { LegacyMigrationBanner } from '@/features/projects/components/legacy-migration-banner'
 import { LegacyMigrationErrors } from '@/features/projects/components/legacy-migration-errors'
 import { TrashSection } from '@/features/projects/components/trash-section'
@@ -68,11 +69,13 @@ function ProjectsIndex() {
 
   const PROJECTS_FOLDER_NAME = 'FreeCutProjects'
 
-  // Extract project name from bundle filename
-  // Handles both "myproject.freecut.zip" and browser-renamed "myproject.freecut (1).zip"
+  // Extract project name from import filename
+  // Handles .freecut.zip and .freecut.json, plus browser-renamed files
   const extractProjectName = (fileName: string): string => {
-    // Remove .zip extension first
+    // Remove .zip extension first (for .freecut.zip)
     let name = fileName.replace(/\.zip$/i, '')
+    // Remove .json extension (for .freecut.json)
+    name = name.replace(/\.json$/i, '')
     // Remove browser duplicate suffix like " (1)", " (2)", etc.
     name = name.replace(/\s*\(\d+\)$/, '')
     // Remove .freecut suffix
@@ -80,10 +83,45 @@ function ProjectsIndex() {
     return name
   }
 
-  // Check if file is a valid bundle (handles browser-renamed files like "project.freecut (1).zip")
-  const isValidBundleFile = (fileName: string): boolean => {
+  // Check if file is a valid import (freecut.zip or freecut.json)
+  const isValidImportFile = (fileName: string): boolean => {
     // Match: anything.freecut.zip or anything.freecut (N).zip
-    return /\.freecut(\s*\(\d+\))?\.zip$/i.test(fileName)
+    if (/\.freecut(\s*\(\d+\))?\.zip$/i.test(fileName)) return true
+    // Match: anything.freecut.json
+    if (/\.freecut\.json$/i.test(fileName)) return true
+    return false
+  }
+
+  // Check if file is a refs format (.freecut.json)
+  const isRefsFile = (fileName: string): boolean => {
+    return /\.freecut\.json$/i.test(fileName)
+  }
+
+  // Pick a .freecut.json file via showOpenFilePicker (D10 strategy B)
+  // Returns [jsonFileHandle, jsonDirectoryHandle?] or [null, undefined]
+  const pickRefsFile = async (): Promise<
+    [FileSystemFileHandle | null, FileSystemDirectoryHandle | undefined]
+  > => {
+    try {
+      const [jsonFileHandle] = await window.showOpenFilePicker({
+        types: [
+          {
+            description: 'FreeCut Path-Reference Project',
+            accept: { 'application/json': ['.freecut.json'] },
+          },
+        ],
+        multiple: false,
+      })
+      // Directory handle is deferred (D10 strategy B) — not prompted upfront.
+      // The path-resolution waterfall will request it only if relativeToJson needs it.
+      return [jsonFileHandle ?? null, undefined]
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return [null, undefined]
+      }
+      logger.error('Failed to pick refs file:', err)
+      return [null, undefined]
+    }
   }
 
   const isLoading = useProjectsLoading()
@@ -100,9 +138,99 @@ function ProjectsIndex() {
     loadProjects()
   }, [loadProjects])
 
-  // Handle import file selection
+  // Handle import file selection (ZIP — hidden <input>)
   const handleImportClick = () => {
     fileInputRef.current?.click()
+  }
+
+  // Handle .freecut.json import — uses showOpenFilePicker for FileSystemFileHandle
+  const handleImportRefsClick = async () => {
+    // Step 1: Pick the .freecut.json file (blocks until user selects or cancels)
+    let jsonFileHandle: FileSystemFileHandle | undefined
+    try {
+      ;[jsonFileHandle] = await window.showOpenFilePicker({
+        types: [
+          {
+            description: 'FreeCut Path-Reference Project',
+            accept: { 'application/json': ['.freecut.json'] },
+          },
+        ],
+        multiple: false,
+      })
+    } catch (err) {
+      // User cancelled — nothing to do
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      logger.error('File picker failed:', err)
+      setImportError(t('projects.import.selectFileFailed'))
+      setImportDialogOpen(true)
+      return
+    }
+
+    // showOpenFilePicker with multiple:false always returns one handle; the
+    // guard satisfies the type system (noUncheckedIndexedAccess types the
+    // destructured element as possibly undefined).
+    if (!jsonFileHandle) return
+
+    // Step 2 (D10): Pick the folder that contains the media. The JSON references
+    // media via `pathHints.relativeToJson`, which may walk upward (`../`) — and the
+    // browser exposes no API to traverse `..` from a directory handle. So we ask
+    // the user for a folder covering the media and register it as an authorized
+    // root; the resolution waterfall's authorized-root scan (matches by fileName +
+    // identity, ignoring path direction) then locates each file. Done in the same
+    // user-gesture chain as step 1 so the directory picker is permitted.
+    let mediaDirHandle: FileSystemDirectoryHandle | undefined
+    try {
+      mediaDirHandle = await window.showDirectoryPicker({
+        id: 'freecut-import-refs-media',
+        mode: 'read',
+        startIn: 'documents',
+      })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      logger.error('Media directory picker failed:', err)
+      setImportError(t('projects.import.selectJsonDirFailed'))
+      setImportDialogOpen(true)
+      return
+    }
+
+    // Register the picked folder as an authorized root so the waterfall's
+    // step-4 scan can resolve media under it (and so future re-imports work).
+    try {
+      const { addAuthorizedRoot } = await import('@/infrastructure/storage/authorized-roots')
+      await addAuthorizedRoot(mediaDirHandle)
+    } catch (err) {
+      logger.error('Failed to register authorized root:', err)
+      // Non-fatal — import proceeds; media may just go unresolved.
+    }
+
+    // Step 3: Start import with progress dialog
+    setImportError(null)
+    setImportProgress({ percent: 0, stage: 'validating' })
+    setIsImporting(true)
+    setImportDialogOpen(true)
+
+    try {
+      const { importProjectFromRefs } =
+        await import('@/features/project-bundle/services/refs-import-service')
+
+      const result = await importProjectFromRefs(
+        jsonFileHandle,
+        mediaDirHandle, // directory handle for step-2 relative resolution (downward paths)
+        {},
+        (progress) => {
+          setImportProgress(progress as ImportProgress)
+        },
+      )
+
+      await loadProjects()
+      handleCloseImportDialog()
+      navigate({ to: '/editor/$projectId', params: { projectId: result.project.id } })
+    } catch (err) {
+      logger.error('Refs import failed:', err)
+      setImportError(err instanceof Error ? err.message : t('projects.import.importFailed'))
+      setImportProgress(null)
+      setIsImporting(false)
+    }
   }
 
   // Step 1: File selected - show destination selection dialog
@@ -114,8 +242,10 @@ function ProjectsIndex() {
     event.target.value = ''
 
     // Validate file extension (handles browser-renamed files like "project.freecut (1).zip")
-    if (!isValidBundleFile(file.name)) {
-      setImportError(t('projects.import.invalidFile', { extension: BUNDLE_EXTENSION }))
+    if (!isValidImportFile(file.name)) {
+      setImportError(
+        t('projects.import.invalidFile', { extension: `${BUNDLE_EXTENSION} or ${REFS_EXTENSION}` }),
+      )
       setImportDialogOpen(true)
       return
     }
@@ -184,6 +314,41 @@ function ProjectsIndex() {
       const { importProjectBundle } =
         await import('@/features/project-bundle/services/bundle-import-service')
 
+      // Dispatch based on file type
+      if (pendingImportFile && isRefsFile(pendingImportFile.name)) {
+        // .freecut.json — refs import path (D10 strategy B)
+        const { importProjectFromRefs } =
+          await import('@/features/project-bundle/services/refs-import-service')
+
+        // Use showOpenFilePicker to get a FileSystemFileHandle
+        // (the hidden <input> gives us a File, not a handle)
+        const [jsonFileHandle, jsonDirHandle] = await pickRefsFile()
+        if (!jsonFileHandle) {
+          setImportError(t('projects.import.noFileSelected'))
+          setIsImporting(false)
+          setImportProgress(null)
+          return
+        }
+
+        const result = await importProjectFromRefs(
+          jsonFileHandle,
+          jsonDirHandle,
+          {},
+          (progress) => {
+            setImportProgress(progress as ImportProgress)
+          },
+        )
+
+        // Reload projects list
+        await loadProjects()
+
+        // Close dialog and navigate to the imported project
+        handleCloseImportDialog()
+        navigate({ to: '/editor/$projectId', params: { projectId: result.project.id } })
+        return
+      }
+
+      // .freecut.zip — existing bundle import path
       const result = await importProjectBundle(
         pendingImportFile,
         finalDestination,
@@ -292,6 +457,10 @@ function ProjectsIndex() {
                 <Upload className="w-4 h-4" />
                 {t('projects.importProject')}
               </Button>
+              <Button variant="outline" size="lg" className="gap-2" onClick={handleImportRefsClick}>
+                <FileJson className="w-4 h-4" />
+                {t('projects.importRefsProject')}
+              </Button>
               <Link to="/projects/new">
                 <Button size="lg" className="gap-2">
                   <Plus className="w-4 h-4" />
@@ -304,7 +473,7 @@ function ProjectsIndex() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".zip"
+              accept=".zip,.freecut.json"
               onChange={handleFileSelect}
               className="hidden"
             />
@@ -391,6 +560,8 @@ function ProjectsIndex() {
             {!importError && isImporting && importProgress && (
               <DialogDescription>
                 {importProgress.stage === 'validating' && t('projects.import.stageValidating')}
+                {importProgress.stage === 'selecting_directory' &&
+                  t('projects.import.stageResolving')}
                 {importProgress.stage === 'extracting' &&
                   (importProgress.currentFile
                     ? t('projects.import.stageExtractingFile', {

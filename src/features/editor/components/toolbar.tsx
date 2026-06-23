@@ -10,6 +10,7 @@ import {
   Github,
   HelpCircle,
   Keyboard,
+  FileJson,
   ListVideo,
   Save,
   Settings,
@@ -63,6 +64,7 @@ interface ToolbarProps {
   onSave?: () => Promise<void>
   onExport?: () => void
   onExportBundle?: () => void
+  onExportRefs?: () => void
   onOpenRenderQueue?: () => void
   /** Number of queued + rendering jobs, shown as a badge on the queue button. */
   renderQueueCount?: number
@@ -75,6 +77,7 @@ export const Toolbar = memo(function Toolbar({
   onSave,
   onExport,
   onExportBundle,
+  onExportRefs,
   onOpenRenderQueue,
   renderQueueCount = 0,
 }: ToolbarProps) {
@@ -332,6 +335,10 @@ export const Toolbar = memo(function Toolbar({
             <DropdownMenuItem onClick={onExport} className="gap-2">
               <Video className="h-4 w-4" />
               {t('toolbar.exportVideo')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onExportRefs} className="gap-2">
+              <FileJson className="h-4 w-4" />
+              {t('toolbar.exportProjectJson')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onExportBundle} className="gap-2">
               <FolderArchive className="h-4 w-4" />
