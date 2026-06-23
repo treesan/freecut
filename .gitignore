@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+openspec
 
 # Editor directories and files
 .vscode/*
@@ -51,6 +52,8 @@ Trace-*.json
 .claude/settings.local.json
 .claude/worktrees/
 .claude/skills/impeccable/
+.claude/commands
+.claude/skills/openspec*
 
 .vercel
 .env*.local
@@ -60,6 +63,7 @@ crates/*/Cargo.lock
 .knip-report.json
 
 tmp
+.vite-hooks/_
 
 # Headless render harness: generated outputs, test assets, scratch workspaces.
 # (The harness source — headless/*.mjs, src/headless/ — is committed.)

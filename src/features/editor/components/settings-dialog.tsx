@@ -38,6 +38,7 @@ import {
 import {
   LocalInferenceUnloadControl,
   LocalModelCacheControl,
+  AuthorizedFoldersList,
   useSettingsStore,
   CAPTIONING_INTERVAL_BOUNDS,
   DEFAULT_CAPTIONING_INTERVAL_SECONDS,
@@ -60,7 +61,6 @@ import { clearPreviewAudioCache } from '@/features/editor/deps/composition-runti
 import { CAPTION_STYLE_PRESETS } from '@/shared/typography/caption-style-presets'
 import { createLogger } from '@/shared/logging/logger'
 import { cn } from '@/shared/ui/cn'
-import { AuthorizedFoldersList } from '@/features/settings/components/authorized-folders-list'
 
 const log = createLogger('SettingsDialog')
 
