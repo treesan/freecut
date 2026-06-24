@@ -257,7 +257,12 @@
       "selectOrCreateFolder": "フォルダを選択または作成...",
       "createInSubfolder": "<code>{{folder}}</code>サブフォルダ内に作成",
       "mediaWillBeSavedTo": "メディアの保存先:",
-      "startImport": "インポートを開始"
+      "startImport": "インポートを開始",
+      "stageResolving": "メディアを検索中...",
+      "stageSelectingFiles": "メディアファイルを検索中...",
+      "selectFileFailed": "選択したファイルを開けませんでした。もう一度お試しください。",
+      "selectJsonDirFailed": "選択したメディアフォルダを開けませんでした。もう一度お試しください。",
+      "mediaPickerExpired": "メディアの選択がタイムアウトしました。再度インポートしてメディアフォルダを選択し直してください。"
     },
     "landing": {
       "beta": "ベータ",

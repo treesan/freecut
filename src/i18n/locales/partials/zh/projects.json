@@ -257,7 +257,12 @@
       "selectOrCreateFolder": "选择或创建文件夹...",
       "createInSubfolder": "在 <code>{{folder}}</code> 子文件夹中创建",
       "mediaWillBeSavedTo": "媒体将保存到：",
-      "startImport": "开始导入"
+      "startImport": "开始导入",
+      "stageResolving": "正在定位媒体...",
+      "stageSelectingFiles": "正在定位媒体文件...",
+      "selectFileFailed": "无法打开所选文件，请重试。",
+      "selectJsonDirFailed": "无法打开所选媒体文件夹，请重试。",
+      "mediaPickerExpired": "媒体选择已超时，请重新导入并再次选择媒体文件夹。"
     },
     "landing": {
       "beta": "测试版",

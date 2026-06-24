@@ -328,7 +328,12 @@
       "selectOrCreateFolder": "Klasör seçin veya oluşturun...",
       "createInSubfolder": "<code>{{folder}}</code> alt klasöründe oluştur",
       "mediaWillBeSavedTo": "Medya şuraya kaydedilecek:",
-      "startImport": "İçe Aktarmayı Başlat"
+      "startImport": "İçe Aktarmayı Başlat",
+      "stageResolving": "Medya konumlandırılıyor...",
+      "stageSelectingFiles": "Medya dosyaları konumlandırılıyor...",
+      "selectFileFailed": "Seçilen dosya açılamadı. Lütfen tekrar deneyin.",
+      "selectJsonDirFailed": "Seçilen medya klasörü açılamadı. Lütfen tekrar deneyin.",
+      "mediaPickerExpired": "Medya seçimi zaman aşımına uğradı. Lütfen yeniden içe aktarın ve medya klasörünü tekrar seçin."
     },
     "settings": {
       "localInference": {

@@ -336,4 +336,198 @@ describe('refs-import-service', () => {
       expect(result.mediaImported).toBe(1)
     })
   })
+
+  describe('lazy media picker (resolveMissing)', () => {
+    function makeFileHandle(content: string): FileSystemFileHandle {
+      const mockFile = { text: vi.fn(async () => content) }
+      return { getFile: vi.fn(async () => mockFile) } as unknown as FileSystemFileHandle
+    }
+
+    // XiangXi regression: media already registered in the workspace library →
+    // resolveMediaRef returns resolved outcomes (Step 1 workspace match), so the
+    // picker callback is NEVER invoked and no new MediaMetadata is created.
+    it('does not call resolveMissing when all refs resolve automatically', async () => {
+      const { validateRefsProject } = await import('../schemas/refs-schema')
+      const refsProject = makeRefsProject([
+        makeMediaEntry({ ref: 'ws-1', fileName: 'DSC_0227.MP4' }),
+        makeMediaEntry({ ref: 'ws-2', fileName: 'DSC_0088.MP4' }),
+      ])
+      vi.mocked(validateRefsProject).mockReturnValueOnce({
+        success: true,
+        data: refsProject,
+      } as never)
+
+      const { resolveMediaRef } = await import('./path-resolution')
+      // Every ref resolves via the workspace library match — picker stays idle.
+      vi.mocked(resolveMediaRef).mockResolvedValue({
+        kind: 'resolved',
+        existingMediaId: 'existing-ws-media',
+        fileHandle: {} as FileSystemFileHandle,
+        fileSize: 1000,
+        fileLastModified: 1700000000000,
+      })
+
+      const resolveMissing = vi.fn(async () => new Map())
+      const result = await importProjectFromRefs(
+        makeFileHandle(JSON.stringify(refsProject)),
+        undefined,
+        { resolveMissing },
+      )
+
+      expect(resolveMissing).not.toHaveBeenCalled()
+      expect(result.mediaImported).toBe(0) // existing media reused, no new import
+      expect(result.mediaUnresolved).toBe(0)
+      expect(createdMedia).toHaveLength(0) // nothing created — ids reused
+    })
+
+    it('folds resolved outcomes from resolveMissing into the import', async () => {
+      const { validateRefsProject } = await import('../schemas/refs-schema')
+      const resolvedEntry = makeMediaEntry({ ref: 'ok-ref', fileName: 'ok.mp4' })
+      const missingEntry = makeMediaEntry({ ref: 'miss-ref', fileName: 'miss.mp4' })
+      const refsProject = makeRefsProject([resolvedEntry, missingEntry])
+      vi.mocked(validateRefsProject).mockReturnValueOnce({
+        success: true,
+        data: refsProject,
+      } as never)
+
+      const { resolveMediaRef } = await import('./path-resolution')
+      // First ref resolves via workspace match (reuses an existing id, so no new
+      // media is created); second is not-found → triggers the picker.
+      vi.mocked(resolveMediaRef)
+        .mockResolvedValueOnce({
+          kind: 'resolved',
+          existingMediaId: 'existing-auto-media',
+          fileHandle: {} as FileSystemFileHandle,
+          fileSize: 1000,
+          fileLastModified: 1700000000000,
+        })
+        .mockResolvedValueOnce({
+          ref: 'miss-ref',
+          fileName: 'miss.mp4',
+          kind: 'not-found',
+          message: 'not found',
+        })
+
+      const resolveMissing = vi.fn(async (unresolved) => {
+        // Picker resolves the missing ref.
+        expect(unresolved.map((e: RefsMediaEntry) => e.ref)).toEqual(['miss-ref'])
+        const map = new Map<
+          string,
+          {
+            kind: 'resolved'
+            fileHandle: FileSystemFileHandle
+            fileSize: number
+            fileLastModified: number
+          }
+        >()
+        map.set('miss-ref', {
+          kind: 'resolved',
+          fileHandle: {} as FileSystemFileHandle,
+          fileSize: 2000,
+          fileLastModified: 1800000000000,
+        })
+        return map
+      })
+
+      const result = await importProjectFromRefs(
+        makeFileHandle(JSON.stringify(refsProject)),
+        undefined,
+        { resolveMissing },
+      )
+
+      expect(resolveMissing).toHaveBeenCalledTimes(1)
+      expect(result.mediaUnresolved).toBe(0)
+      // mediaImported counts NEW media created: the auto-resolved ref reused an
+      // existing id (Step 1), so only the picker-resolved ref was newly created.
+      expect(result.mediaImported).toBe(1)
+      expect(createdMedia).toHaveLength(1) // only the picker-resolved one was new
+      expect(createdMedia[0]!.fileName).toBe('miss.mp4')
+    })
+
+    it('leaves refs unresolved when resolveMissing returns nothing (per-file cancelled)', async () => {
+      const { validateRefsProject } = await import('../schemas/refs-schema')
+      const entry = makeMediaEntry({ ref: 'miss-ref', fileName: 'miss.mp4' })
+      const refsProject = makeRefsProject([entry])
+      vi.mocked(validateRefsProject).mockReturnValueOnce({
+        success: true,
+        data: refsProject,
+      } as never)
+
+      const { resolveMediaRef } = await import('./path-resolution')
+      vi.mocked(resolveMediaRef).mockResolvedValueOnce({
+        ref: 'miss-ref',
+        fileName: 'miss.mp4',
+        kind: 'not-found',
+        message: 'not found',
+      })
+
+      // User cancelled every picker → empty map → ref stays not-found.
+      const resolveMissing = vi.fn(async () => new Map())
+      const result = await importProjectFromRefs(
+        makeFileHandle(JSON.stringify(refsProject)),
+        undefined,
+        { resolveMissing },
+      )
+
+      expect(result.mediaUnresolved).toBe(1)
+      expect(result.failures[0]!.kind).toBe('not-found')
+      expect(createdMedia).toHaveLength(0)
+    })
+
+    it('omitting resolveMissing leaves unresolved refs as not-found (headless parity)', async () => {
+      const { validateRefsProject } = await import('../schemas/refs-schema')
+      const entry = makeMediaEntry({ ref: 'miss-ref', fileName: 'miss.mp4' })
+      const refsProject = makeRefsProject([entry])
+      vi.mocked(validateRefsProject).mockReturnValueOnce({
+        success: true,
+        data: refsProject,
+      } as never)
+
+      const { resolveMediaRef } = await import('./path-resolution')
+      vi.mocked(resolveMediaRef).mockResolvedValueOnce({
+        ref: 'miss-ref',
+        fileName: 'miss.mp4',
+        kind: 'not-found',
+        message: 'not found',
+      })
+
+      // No callback — headless caller. Behavior must match the pre-change path.
+      const result = await importProjectFromRefs(
+        makeFileHandle(JSON.stringify(refsProject)),
+        undefined,
+      )
+
+      expect(result.mediaUnresolved).toBe(1)
+      expect(result.failures[0]!.kind).toBe('not-found')
+      expect(result.project.id).toBe('new-proj-1') // project still created
+    })
+
+    it('invokes onProgress with selecting_directory before the picker', async () => {
+      const { validateRefsProject } = await import('../schemas/refs-schema')
+      const entry = makeMediaEntry({ ref: 'miss-ref', fileName: 'miss.mp4' })
+      const refsProject = makeRefsProject([entry])
+      vi.mocked(validateRefsProject).mockReturnValueOnce({
+        success: true,
+        data: refsProject,
+      } as never)
+
+      const { resolveMediaRef } = await import('./path-resolution')
+      vi.mocked(resolveMediaRef).mockResolvedValueOnce({
+        ref: 'miss-ref',
+        fileName: 'miss.mp4',
+        kind: 'not-found',
+        message: 'not found',
+      })
+
+      const stages: string[] = []
+      await importProjectFromRefs(
+        makeFileHandle(JSON.stringify(refsProject)),
+        undefined,
+        { resolveMissing: async () => new Map() },
+        (p) => stages.push(p.stage),
+      )
+
+      expect(stages).toContain('selecting_directory')
+    })
+  })
 })

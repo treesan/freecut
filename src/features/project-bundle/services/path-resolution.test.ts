@@ -91,12 +91,32 @@ function makeMediaMetadata(overrides: Partial<MediaMetadata> = {}): MediaMetadat
 
 describe('path-resolution', () => {
   describe('Step 1: Workspace media library match', () => {
-    it('resolves when workspace has matching identity triple', async () => {
+    it('resolves when workspace has matching fileName + fileSize', async () => {
       const entry = makeEntry()
       const media = makeMediaMetadata()
       const ctx: ResolutionContext = {
         workspaceMediaIndex: {
-          byIdentity: new Map([['clip.mp4:1000:1700000000000', media]]),
+          byIdentity: new Map([['clip.mp4:1000', media]]),
+        },
+        authorizedRoots: [],
+      }
+
+      const result = await resolveMediaRef(entry, ctx)
+      expect(result.kind).toBe('resolved')
+      if (result.kind === 'resolved') {
+        expect(result.existingMediaId).toBe('media-001')
+      }
+    })
+
+    it('resolves even when mtime differs (workspace copy rewrote mtime)', async () => {
+      // A workspace media file whose on-disk/metadata mtime drifted from the
+      // JSON value (e.g. copied into the workspace weeks later) must still match
+      // — the index is keyed on fileName + fileSize only.
+      const entry = makeEntry({ fileLastModified: 1700000000000 })
+      const media = makeMediaMetadata({ fileLastModified: 1782230986000 })
+      const ctx: ResolutionContext = {
+        workspaceMediaIndex: {
+          byIdentity: new Map([['clip.mp4:1000', media]]),
         },
         authorizedRoots: [],
       }
@@ -113,7 +133,7 @@ describe('path-resolution', () => {
       const media = makeMediaMetadata({ fileSize: 1000 })
       const ctx: ResolutionContext = {
         workspaceMediaIndex: {
-          byIdentity: new Map([['clip.mp4:1000:1700000000000', media]]),
+          byIdentity: new Map([['clip.mp4:1000', media]]),
         },
         authorizedRoots: [],
       }
@@ -128,7 +148,7 @@ describe('path-resolution', () => {
       const media = makeMediaMetadata({ fileName: 'clip.mp4' })
       const ctx: ResolutionContext = {
         workspaceMediaIndex: {
-          byIdentity: new Map([['clip.mp4:1000:1700000000000', media]]),
+          byIdentity: new Map([['clip.mp4:1000', media]]),
         },
         authorizedRoots: [],
       }
@@ -139,10 +159,10 @@ describe('path-resolution', () => {
   })
 
   describe('resolveViaFilePicker', () => {
-    it('returns identity-mismatch when picked file differs', async () => {
+    it('returns identity-mismatch when picked file size differs', async () => {
       const entry = makeEntry({ fileSize: 1000, fileLastModified: 1700000000000 })
 
-      // Mock file handle that returns different identity
+      // Mock file handle that returns different size
       const mockHandle = {
         getFile: vi.fn(async () => ({
           size: 999, // mismatch!
@@ -154,7 +174,7 @@ describe('path-resolution', () => {
       expect(result.kind).toBe('identity-mismatch')
     })
 
-    it('resolves when picked file matches identity', async () => {
+    it('resolves when picked file matches size', async () => {
       const entry = makeEntry({ fileSize: 1000, fileLastModified: 1700000000000 })
 
       const mockHandle = {
@@ -168,35 +188,23 @@ describe('path-resolution', () => {
       expect(result.kind).toBe('resolved')
     })
 
-    it('resolves when mtime is within ±1ms (round vs floor drift)', async () => {
-      // video-use exports mtime via round(st_mtime*1000); the browser's
-      // File.lastModified is a floor. For mtimes with float drift these land
-      // 1ms apart and the strict check wrongly rejected matching files.
-      const entry = makeEntry({ fileSize: 1000, fileLastModified: 1700000001170 })
+    it('resolves on size match despite large mtime drift (workspace/sync copy)', async () => {
+      // Copying a file into the workspace media folder, moving it across
+      // machines, or a sync client all rewrite mtime while preserving bytes.
+      // Real case: DSC_0088.MP4 kept its original-source mtime in the refs JSON
+      // but its on-disk copy carried a copy-time mtime ~60 days later. Size is
+      // byte-identical, so it must resolve.
+      const entry = makeEntry({ fileSize: 66156951, fileLastModified: 1777540461049 })
 
       const mockHandle = {
         getFile: vi.fn(async () => ({
-          size: 1000, // exact
-          lastModified: 1700000001169, // 1ms below the JSON value
+          size: 66156951, // exact
+          lastModified: 1782230986000, // ~60 days later — must NOT reject
         })),
       } as unknown as FileSystemFileHandle
 
       const result = await resolveViaFilePicker(entry, mockHandle)
       expect(result.kind).toBe('resolved')
-    })
-
-    it('still rejects mtime drift beyond the ±1ms tolerance', async () => {
-      const entry = makeEntry({ fileSize: 1000, fileLastModified: 1700000001170 })
-
-      const mockHandle = {
-        getFile: vi.fn(async () => ({
-          size: 1000, // exact
-          lastModified: 1700000001168, // 2ms below — outside tolerance
-        })),
-      } as unknown as FileSystemFileHandle
-
-      const result = await resolveViaFilePicker(entry, mockHandle)
-      expect(result.kind).toBe('identity-mismatch')
     })
   })
 
@@ -243,8 +251,8 @@ describe('path-resolution', () => {
 
       const ctx = await buildResolutionContext(media)
       expect(ctx.workspaceMediaIndex.byIdentity.size).toBe(2)
-      expect(ctx.workspaceMediaIndex.byIdentity.has('a.mp4:100:1000')).toBe(true)
-      expect(ctx.workspaceMediaIndex.byIdentity.has('b.mp4:200:2000')).toBe(true)
+      expect(ctx.workspaceMediaIndex.byIdentity.has('a.mp4:100')).toBe(true)
+      expect(ctx.workspaceMediaIndex.byIdentity.has('b.mp4:200')).toBe(true)
     })
   })
 })

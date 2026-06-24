@@ -31,7 +31,7 @@ import type { Project } from '@/types/project'
 import type { ProjectFormData } from '@/features/projects/utils/validation'
 import type { ImportProgress } from '@/features/project-bundle/types/bundle'
 import { BUNDLE_EXTENSION } from '@/features/project-bundle/types/bundle'
-import { REFS_EXTENSION } from '@/features/project-bundle/types/refs'
+import { REFS_EXTENSION, type RefsMediaEntry } from '@/features/project-bundle/types/refs'
 import { LegacyMigrationBanner } from '@/features/projects/components/legacy-migration-banner'
 import { LegacyMigrationErrors } from '@/features/projects/components/legacy-migration-errors'
 import { TrashSection } from '@/features/projects/components/trash-section'
@@ -143,7 +143,12 @@ function ProjectsIndex() {
     fileInputRef.current?.click()
   }
 
-  // Handle .freecut.json import — uses showOpenFilePicker for FileSystemFileHandle
+  // Handle .freecut.json import — uses showOpenFilePicker for FileSystemFileHandle.
+  // The media picker is LAZY: the resolution waterfall runs its automatic steps
+  // (workspace library match + authorized-root scan) first, and only refs it
+  // can't resolve trigger the picker (below in `resolveMissing`). When every
+  // referenced file already lives in the workspace, import completes with zero
+  // prompts.
   const handleImportRefsClick = async () => {
     // Step 1: Pick the .freecut.json file (blocks until user selects or cancels)
     let jsonFileHandle: FileSystemFileHandle | undefined
@@ -171,43 +176,72 @@ function ProjectsIndex() {
     // destructured element as possibly undefined).
     if (!jsonFileHandle) return
 
-    // Step 2 (D10): Pick the folder that contains the media. The JSON references
-    // media via `pathHints.relativeToJson`, which may walk upward (`../`) — and the
-    // browser exposes no API to traverse `..` from a directory handle. So we ask
-    // the user for a folder covering the media and register it as an authorized
-    // root; the resolution waterfall's authorized-root scan (matches by fileName +
-    // identity, ignoring path direction) then locates each file. Done in the same
-    // user-gesture chain as step 1 so the directory picker is permitted.
-    let mediaDirHandle: FileSystemDirectoryHandle | undefined
-    try {
-      mediaDirHandle = await window.showDirectoryPicker({
-        id: 'freecut-import-refs-media',
-        mode: 'read',
-        startIn: 'documents',
-      })
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      logger.error('Media directory picker failed:', err)
-      setImportError(t('projects.import.selectJsonDirFailed'))
-      setImportDialogOpen(true)
-      return
-    }
-
-    // Register the picked folder as an authorized root so the waterfall's
-    // step-4 scan can resolve media under it (and so future re-imports work).
-    try {
-      const { addAuthorizedRoot } = await import('@/infrastructure/storage/authorized-roots')
-      await addAuthorizedRoot(mediaDirHandle)
-    } catch (err) {
-      logger.error('Failed to register authorized root:', err)
-      // Non-fatal — import proceeds; media may just go unresolved.
-    }
-
-    // Step 3: Start import with progress dialog
+    // Step 2: Start import with a lazy picker callback. `jsonDirectoryHandle`
+    // is intentionally undefined — it is acquired inside `resolveMissing` only
+    // if the automatic steps fail to resolve every ref.
     setImportError(null)
     setImportProgress({ percent: 0, stage: 'validating' })
     setIsImporting(true)
     setImportDialogOpen(true)
+
+    // Lazy Step-5 picker. One directory picker — registered as an authorized
+    // root AND scanned via `resolveViaPicker` (Step 4 recursive scan covers both
+    // deep descendants and co-located `relativeToJson` files under that root) —
+    // then per-file pickers for anything still missing. The service folds the
+    // returned resolved outcomes back into the import.
+    const resolveMissing = async (
+      unresolved: RefsMediaEntry[],
+    ): Promise<
+      Map<string, import('@/features/project-bundle/services/path-resolution').ResolutionOutcome>
+    > => {
+      const { resolveViaPicker, resolveViaFilePicker } =
+        await import('@/features/project-bundle/services/path-resolution')
+
+      let dirHandle: FileSystemDirectoryHandle
+      try {
+        dirHandle = await window.showDirectoryPicker({
+          id: 'freecut-import-refs-media',
+          mode: 'read',
+          startIn: 'documents',
+        })
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // User cancelled — leave all unresolved; the project is still created.
+          return new Map()
+        }
+        if (err instanceof DOMException && err.name === 'SecurityError') {
+          // Transient activation can expire if the automatic-resolution pass
+          // took long before the picker fired. Surface a retry hint rather than
+          // crashing the import.
+          toast.error(t('projects.import.mediaPickerExpired'))
+          return new Map()
+        }
+        logger.error('Media directory picker failed:', err)
+        toast.error(t('projects.import.selectJsonDirFailed'))
+        return new Map()
+      }
+
+      // registerAsRoot=true → addAuthorizedRoot + tag outcomes so the
+      // service's touchUsedAuthorizedRoots updates lastUsedAt on the new root.
+      const results = await resolveViaPicker(unresolved, dirHandle, true)
+
+      // Per-file fallback for refs the directory scan didn't find.
+      for (const entry of unresolved) {
+        if (results.has(entry.ref)) continue
+        setImportProgress({ percent: 85, stage: 'selecting_files', currentFile: entry.fileName })
+        try {
+          const [fileHandle] = await window.showOpenFilePicker({ multiple: false })
+          if (!fileHandle) continue
+          const outcome = await resolveViaFilePicker(entry, fileHandle)
+          if (outcome.kind === 'resolved') results.set(entry.ref, outcome)
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') continue
+          logger.error('Per-file media picker failed:', err)
+        }
+      }
+
+      return results
+    }
 
     try {
       const { importProjectFromRefs } =
@@ -215,8 +249,8 @@ function ProjectsIndex() {
 
       const result = await importProjectFromRefs(
         jsonFileHandle,
-        mediaDirHandle, // directory handle for step-2 relative resolution (downward paths)
-        {},
+        undefined, // jsonDirectoryHandle — acquired lazily inside resolveMissing
+        { resolveMissing },
         (progress) => {
           setImportProgress(progress as ImportProgress)
         },
@@ -562,6 +596,8 @@ function ProjectsIndex() {
                 {importProgress.stage === 'validating' && t('projects.import.stageValidating')}
                 {importProgress.stage === 'selecting_directory' &&
                   t('projects.import.stageResolving')}
+                {importProgress.stage === 'selecting_files' &&
+                  t('projects.import.stageSelectingFiles')}
                 {importProgress.stage === 'extracting' &&
                   (importProgress.currentFile
                     ? t('projects.import.stageExtractingFile', {

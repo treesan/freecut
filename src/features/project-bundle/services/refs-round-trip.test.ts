@@ -132,6 +132,15 @@ vi.mock('./path-resolution', () => ({
     authorizedRoots: [],
   })),
   touchUsedAuthorizedRoots: vi.fn(async () => {}),
+  // Step-5 picker helpers — exported so callers (the UI callback) can use them.
+  // They are never reached in the no-picker regression below.
+  resolveViaPicker: vi.fn(async () => new Map()),
+  resolveViaFilePicker: vi.fn(async () => ({
+    kind: 'not-found' as const,
+    ref: '',
+    fileName: '',
+    message: 'not reached',
+  })),
 }))
 
 vi.mock('@/shared/projects/migrations', () => ({
@@ -220,5 +229,42 @@ describe('refs round-trip (export → import)', () => {
     expect(restoreTimelineFromBundle).toHaveBeenCalled()
     const [, mediaIdMap] = vi.mocked(restoreTimelineFromBundle).mock.calls[0]!
     expect(mediaIdMap.get(exportedRef)).toBeTruthy()
+  })
+
+  // XiangXi regression: when every referenced media already exists in the
+  // workspace library (matching identity triple), the lazy picker must NOT be
+  // invoked — import completes with zero prompts and reuses the existing
+  // mediaId (no new media/{uuid}/ dir created).
+  it('skips the picker entirely when all media matches the workspace library', async () => {
+    const { resolveMediaRef } = await import('./path-resolution')
+
+    // The export produced one media entry. On import, Step 1 (workspace library
+    // match) resolves it by reusing the existing mediaId — no new handle.
+    vi.mocked(resolveMediaRef).mockResolvedValueOnce({
+      kind: 'resolved',
+      existingMediaId: 'media-1', // reuse — no new MediaMetadata created
+      fileHandle: { name: 'clip1.mp4' } as FileSystemFileHandle,
+      fileSize: 1000,
+      fileLastModified: 1700000000000,
+    })
+
+    const resolveMissing = vi.fn(async () => new Map())
+    const { handle, files } = makeMockDirHandle()
+    await exportProjectAsRefs('proj-1', handle)
+    const writtenJson = files.get('Round_Trip.freecut.json')!
+
+    const result = await importProjectFromRefs(
+      {
+        getFile: vi.fn(async () => ({ text: vi.fn(async () => writtenJson) })),
+      } as unknown as FileSystemFileHandle,
+      undefined,
+      { resolveMissing },
+    )
+
+    // The picker was never needed: everything resolved via the workspace match.
+    expect(resolveMissing).not.toHaveBeenCalled()
+    expect(result.mediaUnresolved).toBe(0)
+    // Reused the existing id → zero new media created.
+    expect(result.mediaImported).toBe(0)
   })
 })

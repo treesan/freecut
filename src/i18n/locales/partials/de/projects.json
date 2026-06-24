@@ -257,7 +257,12 @@
       "selectOrCreateFolder": "Ordner auswählen oder erstellen...",
       "createInSubfolder": "Im Unterordner <code>{{folder}}</code> erstellen",
       "mediaWillBeSavedTo": "Medien werden gespeichert in:",
-      "startImport": "Import starten"
+      "startImport": "Import starten",
+      "stageResolving": "Medien werden gesucht...",
+      "stageSelectingFiles": "Mediendateien werden gesucht...",
+      "selectFileFailed": "Die ausgewählte Datei konnte nicht geöffnet werden. Bitte erneut versuchen.",
+      "selectJsonDirFailed": "Der ausgewählte Medienordner konnte nicht geöffnet werden. Bitte erneut versuchen.",
+      "mediaPickerExpired": "Die Mediensuche ist abgelaufen. Bitte erneut importieren und den Medienordner erneut auswählen."
     },
     "landing": {
       "beta": "Beta",

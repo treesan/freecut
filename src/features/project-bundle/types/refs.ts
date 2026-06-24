@@ -8,6 +8,7 @@
  */
 
 import type { Project, ProjectTimeline } from '@/types/project'
+import type { ResolutionOutcome } from '../services/path-resolution'
 
 // ---------------------------------------------------------------------------
 // Format constants
@@ -187,6 +188,21 @@ export interface RefsImportOptions {
   newProjectName?: string
   /** Destination directory for the imported project */
   destinationDirectory?: FileSystemDirectoryHandle
+
+  /**
+   * Lazy picker fallback (Step 5 of the resolution waterfall).
+   *
+   * Invoked with the references that the automatic steps (workspace library
+   * match, authorized-root scan) could NOT resolve, so the caller can prompt
+   * the user to locate the media (directory picker, then per-file pickers).
+   * The returned map folds `ref → resolved outcome` back into the import; any
+   * reference absent from the map stays unresolved (recorded as missing).
+   *
+   * When omitted (non-UI / headless / test callers), unresolved references
+   * are recorded as `not-found` with no prompting — preserving the prior
+   * behavior. Keeping the picker in the caller keeps the service browser-agnostic.
+   */
+  resolveMissing?: (unresolved: RefsMediaEntry[]) => Promise<Map<string, ResolutionOutcome>>
 }
 
 /**

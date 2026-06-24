@@ -217,6 +217,36 @@ export async function importProjectFromRefs(
     })
   }
 
+  // Step 7b: Lazy picker fallback (waterfall Step 5). The automatic steps
+  // (workspace library match + authorized-root scan) have run via
+  // resolveMediaRef. Any reference still unresolved (not-found, identity
+  // mismatch, etc.) is handed to the caller's `resolveMissing` callback, which
+  // prompts the user (directory picker → per-file). Resolved outcomes fold
+  // back into `outcomes`; refs still absent keep their original failure and
+  // are marked missing in Step 9. When no callback is supplied (headless /
+  // test), behavior is unchanged — refs stay unresolved. Keeping the picker in
+  // the caller keeps the service browser-agnostic.
+  if (options.resolveMissing) {
+    const unresolvedIndices: number[] = []
+    for (let i = 0; i < outcomes.length; i++) {
+      if (outcomes[i]!.kind !== 'resolved') unresolvedIndices.push(i)
+    }
+    if (unresolvedIndices.length > 0) {
+      onProgress?.({ percent: 80, stage: 'selecting_directory' })
+      const unresolvedEntries = unresolvedIndices.map((i) => refsProject.media[i]!)
+      const resolvedByPicker = await options.resolveMissing(unresolvedEntries)
+      for (const i of unresolvedIndices) {
+        const entry = refsProject.media[i]!
+        const outcome = resolvedByPicker.get(entry.ref)
+        // Only fold resolved outcomes; the picker helpers only place resolved
+        // entries in their map, so absent keys keep their original failure.
+        if (outcome && outcome.kind === 'resolved') {
+          outcomes[i] = outcome
+        }
+      }
+    }
+  }
+
   // Step 8: Create MediaMetadata for resolved refs
   const mediaIdMap = new Map<string, string>() // ref → new mediaId
   const failures: RefsResolutionFailure[] = []

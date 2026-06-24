@@ -257,7 +257,12 @@
       "selectOrCreateFolder": "Selecciona o crea una carpeta...",
       "createInSubfolder": "Crear en la subcarpeta <code>{{folder}}</code>",
       "mediaWillBeSavedTo": "Los medios se guardarán en:",
-      "startImport": "Iniciar importación"
+      "startImport": "Iniciar importación",
+      "stageResolving": "Localizando medios...",
+      "stageSelectingFiles": "Localizando archivos multimedia...",
+      "selectFileFailed": "No se pudo abrir el archivo seleccionado. Inténtalo de nuevo.",
+      "selectJsonDirFailed": "No se pudo abrir la carpeta de medios seleccionada. Inténtalo de nuevo.",
+      "mediaPickerExpired": "La selección de medios ha expirado. Vuelve a importar y selecciona la carpeta de medios de nuevo."
     },
     "landing": {
       "beta": "Beta",

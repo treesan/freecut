@@ -257,7 +257,12 @@
       "selectOrCreateFolder": "Selecionar ou criar pasta...",
       "createInSubfolder": "Criar na subpasta <code>{{folder}}</code>",
       "mediaWillBeSavedTo": "As mídias serão salvas em:",
-      "startImport": "Iniciar importação"
+      "startImport": "Iniciar importação",
+      "stageResolving": "Localizando mídia...",
+      "stageSelectingFiles": "Localizando arquivos de mídia...",
+      "selectFileFailed": "Não foi possível abrir o arquivo selecionado. Tente novamente.",
+      "selectJsonDirFailed": "Não foi possível abrir a pasta de mídia selecionada. Tente novamente.",
+      "mediaPickerExpired": "A seleção de mídia expirou. Reimporte e selecione a pasta de mídia novamente."
     },
     "landing": {
       "beta": "Beta",

@@ -4,14 +4,15 @@
  * For each `media[i]` reference in a `.freecut.json`, the importer tries
  * resolution in this order (D3):
  *
- *   1. Workspace media library match (fileName + fileSize + fileLastModified)
+ *   1. Workspace media library match (fileName + fileSize)
  *   2. pathHints.relativeToJson (from JSON directory handle)
  *   3. pathHints.absolute (via authorized-root traversal)
- *   4. Authorized-root descendant scan (lazy, fileName + size + mtime)
+ *   4. Authorized-root descendant scan (lazy, fileName + fileSize)
  *   5. User-picker fallback (directory or per-file)
  *
- * Every successful resolution is identity-validated (fileSize + fileLastModified).
- * Mismatches produce `ResolutionFailure { kind: 'identity-mismatch' }`.
+ * Every successful resolution is identity-validated on `fileSize` (mtime drift
+ * is tolerated — see validateIdentity). Size mismatches produce
+ * `ResolutionFailure { kind: 'identity-mismatch' }`.
  */
 
 import type { RefsMediaEntry, RefsResolutionFailure } from '../types/refs'
@@ -34,14 +35,14 @@ const logger = createLogger('PathResolution')
 export interface ResolutionContext {
   /** Handle for the directory containing the imported `.freecut.json` */
   jsonDirectoryHandle?: FileSystemDirectoryHandle
-  /** Index of workspace media, keyed by identity triple */
+  /** Index of workspace media, keyed by fileName + fileSize */
   workspaceMediaIndex: WorkspaceMediaIndex
   /** Authorized roots (loaded + permission-checked) */
   authorizedRoots: AuthorizedRootEntry[]
 }
 
 export interface WorkspaceMediaIndex {
-  /** Key: `${fileName}:${fileSize}:${fileLastModified}` → MediaMetadata */
+  /** Key: `${fileName}:${fileSize}` → MediaMetadata */
   byIdentity: Map<string, MediaMetadata>
 }
 
@@ -82,8 +83,12 @@ const SCAN_MAX_ENTRIES_PER_ROOT = 10_000
 // Helpers
 // ---------------------------------------------------------------------------
 
-function identityKey(fileName: string, fileSize: number, fileLastModified: number): string {
-  return `${fileName}:${fileSize}:${fileLastModified}`
+function identityKey(fileName: string, fileSize: number): string {
+  // Keyed on fileName + fileSize only (NOT mtime). mtime drifts when a file is
+  // copied into the workspace or synced, so including it would split a single
+  // logical file across two keys and break Step-1 reuse. fileSize is the
+  // authoritative fingerprint — see validateIdentity.
+  return `${fileName}:${fileSize}`
 }
 
 /**
@@ -105,41 +110,40 @@ async function readFileIdentity(
 /**
  * Validate that a candidate file matches the expected identity.
  * Returns null on match, or a ResolutionFailure on mismatch.
- */
-/**
- * Tolerance (ms) for the `fileLastModified` identity check.
  *
- * External exporters (e.g. the video-use Python tool) compute mtime with
- * `round(st_mtime * 1000)`, while the browser's `File.lastModified` is a
- * floor/truncation of the same value. For mtimes whose sub-second part has
- * floating-point representation drift (e.g. 1763180881.1699998 instead of
- * .17), `round` and `floor` land 1ms apart and the strict equality check
- * rejects a genuinely-matching file.
+ * `fileSize` is the authoritative identity fingerprint: it is byte-exact, has
+ * no rounding ambiguity, and a same-name same-size collision between two
+ * genuinely-different video files is vanishingly unlikely.
  *
- * `fileSize` remains an exact match (it is the stronger fingerprint and has
- * no rounding ambiguity). A ±1ms window only absorbs sub-millisecond
- * float representation noise — sync-client mtime rewrites (Dropbox/iCloud,
- * typically seconds-scale) still fall outside it and are correctly rejected
- * per the B1 strict-identity decision.
+ * `fileLastModified` is intentionally NOT a hard gate. Copying a file into the
+ * workspace media folder, moving it across machines, or a sync client
+ * (Dropbox/iCloud) all rewrite mtime while preserving bytes. Requiring an exact
+ * (or near-exact) mtime match silently rejected genuinely-matching files — e.g.
+ * a workspace clip whose `metadata.json` kept the original source mtime but
+ * whose on-disk copy carries the copy-time mtime weeks later. The earlier ±1ms
+ * tolerance only absorbed sub-millisecond float drift and still rejected these.
+ * We therefore accept on `fileSize` alone and treat mtime drift as a diagnostic
+ * signal only. (Content-hash matching remains explicitly out of scope.)
  */
-const MTIME_TOLERANCE_MS = 1
-
 function validateIdentity(
   entry: RefsMediaEntry,
   actualSize: number,
   actualLastModified: number,
 ): RefsResolutionFailure | null {
-  const sizeMatches = actualSize === entry.fileSize
-  const mtimeMatches = Math.abs(actualLastModified - entry.fileLastModified) <= MTIME_TOLERANCE_MS
-  if (!sizeMatches || !mtimeMatches) {
+  if (actualSize !== entry.fileSize) {
     return {
       ref: entry.ref,
       fileName: entry.fileName,
       kind: 'identity-mismatch',
-      message: `Identity mismatch for ${entry.fileName}: expected size=${entry.fileSize} mtime=${entry.fileLastModified}, got size=${actualSize} mtime=${actualLastModified}`,
+      message: `Identity mismatch for ${entry.fileName}: expected size=${entry.fileSize}, got size=${actualSize}`,
       expected: { fileSize: entry.fileSize, fileLastModified: entry.fileLastModified },
       actual: { fileSize: actualSize, fileLastModified: actualLastModified },
     }
+  }
+  if (actualLastModified !== entry.fileLastModified) {
+    logger.debug(
+      `Accepting ${entry.fileName} on fileSize match despite mtime drift (expected ${entry.fileLastModified}, got ${actualLastModified})`,
+    )
   }
   return null
 }
@@ -152,7 +156,7 @@ async function resolveFromWorkspace(
   entry: RefsMediaEntry,
   ctx: ResolutionContext,
 ): Promise<ResolutionOutcome | null> {
-  const key = identityKey(entry.fileName, entry.fileSize, entry.fileLastModified)
+  const key = identityKey(entry.fileName, entry.fileSize)
   const existing = ctx.workspaceMediaIndex.byIdentity.get(key)
   if (!existing) return null
 
@@ -253,7 +257,7 @@ interface ScanCounter {
 }
 
 /**
- * Recursively scan a directory for a file matching the identity triple.
+ * Recursively scan a directory for a file matching fileName + fileSize.
  * Depth-first with shortcut on first match.
  */
 async function scanDirectoryForMatch(
@@ -450,7 +454,7 @@ export async function buildResolutionContext(
   // Build workspace media index
   const byIdentity = new Map<string, MediaMetadata>()
   for (const media of workspaceMedia) {
-    const key = identityKey(media.fileName, media.fileSize, media.fileLastModified ?? 0)
+    const key = identityKey(media.fileName, media.fileSize)
     byIdentity.set(key, media)
   }
 

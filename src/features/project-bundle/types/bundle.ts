@@ -104,6 +104,7 @@ export interface ImportProgress {
   stage:
     | 'validating'
     | 'selecting_directory'
+    | 'selecting_files'
     | 'extracting'
     | 'importing_media'
     | 'linking'

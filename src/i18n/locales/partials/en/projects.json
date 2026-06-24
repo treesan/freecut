@@ -257,7 +257,12 @@
       "selectOrCreateFolder": "Select or create folder...",
       "createInSubfolder": "Create in <code>{{folder}}</code> subfolder",
       "mediaWillBeSavedTo": "Media will be saved to:",
-      "startImport": "Start Import"
+      "startImport": "Start Import",
+      "stageResolving": "Locating media...",
+      "stageSelectingFiles": "Locating media files...",
+      "selectFileFailed": "Could not open the selected file. Please try again.",
+      "selectJsonDirFailed": "Could not open the selected media folder. Please try again.",
+      "mediaPickerExpired": "Media selection timed out. Please re-import and select the media folder again."
     },
     "landing": {
       "beta": "Beta",

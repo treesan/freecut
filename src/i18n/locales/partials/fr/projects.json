@@ -257,7 +257,12 @@
       "selectOrCreateFolder": "Sélectionner ou créer un dossier...",
       "createInSubfolder": "Créer dans le sous-dossier <code>{{folder}}</code>",
       "mediaWillBeSavedTo": "Les médias seront enregistrés dans :",
-      "startImport": "Démarrer l'importation"
+      "startImport": "Démarrer l'importation",
+      "stageResolving": "Localisation des médias...",
+      "stageSelectingFiles": "Localisation des fichiers multimédias...",
+      "selectFileFailed": "Impossible d'ouvrir le fichier sélectionné. Veuillez réessayer.",
+      "selectJsonDirFailed": "Impossible d'ouvrir le dossier multimédia sélectionné. Veuillez réessayer.",
+      "mediaPickerExpired": "La sélection des médias a expiré. Veuillez réimporter et sélectionner à nouveau le dossier multimédia."
     },
     "landing": {
       "beta": "Bêta",
