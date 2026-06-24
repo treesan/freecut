@@ -137,6 +137,15 @@ export interface RefsProject {
 
   /** Media references (path-based, no bytes) */
   media: RefsMediaEntry[]
+
+  /**
+   * Optional SHA-256 integrity checksum over the document with the `checksum`
+   * field blanked. Computed on export via the shared `computeProjectChecksum`
+   * helper (same canonicalization as the snapshot format). Verified on import
+   * as a non-fatal warning — the strict `fileSize + fileLastModified` identity
+   * gate remains the authoritative media check. Omitted by older files.
+   */
+  checksum?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +161,12 @@ export interface RefsExportOptions {
 
   /** Override the display name of the output file (without extension) */
   displayName?: string
+
+  /** Compute and write a `checksum` field (default: true). Mirrors the snapshot
+   * format's `includeChecksum`. The export dialog does not expose a UI toggle
+   * (checksum-on is always correct for real use); the option exists for parity
+   * and for tests that want deterministic output without a checksum. */
+  includeChecksum?: boolean
 }
 
 export interface RefsExportResult {

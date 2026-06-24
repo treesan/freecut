@@ -23,7 +23,7 @@ import { validateRefsProject } from '../schemas/refs-schema'
 import { getProject, getProjectMediaIds } from '@/infrastructure/storage'
 import { importMediaLibraryService } from '@/features/project-bundle/deps/media-library'
 import { convertTimelineForBundle } from './bundle-timeline'
-import { sanitizeDownloadFilename } from './pure-utils'
+import { sanitizeDownloadFilename, computeProjectChecksum } from './pure-utils'
 import { createLogger } from '@/shared/logging/logger'
 
 const logger = createLogger('RefsExportService')
@@ -206,7 +206,7 @@ export async function exportProjectAsRefs(
   destinationDir: FileSystemDirectoryHandle,
   options: RefsExportOptions = {},
 ): Promise<RefsExportResult> {
-  const { stripPaths = false, prettyPrint = true, displayName } = options
+  const { stripPaths = false, prettyPrint = true, displayName, includeChecksum = true } = options
 
   logger.info(`Exporting project ${projectId} as .freecut.json`)
 
@@ -272,7 +272,15 @@ export async function exportProjectAsRefs(
     throw new Error('Exported project failed schema validation')
   }
 
-  // Step 6: Write JSON to destination directory
+  // Step 6: Compute and attach the integrity checksum. Computed over the
+  // document with the `checksum` field blanked (see computeProjectChecksum),
+  // so the value is self-consistent on read. Mirrors the snapshot format's
+  // checksum and shares the same helper.
+  if (includeChecksum) {
+    refsProject.checksum = await computeProjectChecksum(refsProject)
+  }
+
+  // Step 7: Write JSON to destination directory
   const jsonString = prettyPrint
     ? JSON.stringify(refsProject, null, 2)
     : JSON.stringify(refsProject)

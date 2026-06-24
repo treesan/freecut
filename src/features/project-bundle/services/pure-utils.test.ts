@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import {
   computeBundleManifestChecksum,
+  computeProjectChecksum,
   computeSnapshotChecksum,
   getUniqueBundleFileName,
   sanitizeBundleDirectoryName,
@@ -69,6 +70,39 @@ describe('project bundle pure utilities', () => {
     expect(await computeSnapshotChecksum(snapshot)).toBe(
       '1c2ec83c618a3613358a9bf4136863005699d3ee9ff6d7e55ad2c2a4c743ea46',
     )
+  })
+
+  describe('computeProjectChecksum', () => {
+    const baseDoc = {
+      version: '1.0',
+      exportedAt: '2026-01-02T03:04:05.000Z',
+      editorVersion: '1.0.0',
+      project: { id: 'p1', name: 'P', duration: 10 },
+      mediaReferences: [{ id: 'm1', fileName: 'a.mp4', fileSize: 1 }],
+    }
+
+    it('is stable for the same object literal', async () => {
+      const a = await computeProjectChecksum({ ...baseDoc })
+      const b = await computeProjectChecksum({ ...baseDoc })
+      expect(a).toBe(b)
+    })
+
+    it('changes when any non-checksum field changes', async () => {
+      const a = await computeProjectChecksum(baseDoc)
+      const b = await computeProjectChecksum({
+        ...baseDoc,
+        project: { id: 'p1', name: 'P2', duration: 10 },
+      })
+      expect(a).not.toBe(b)
+    })
+
+    it('ignores the checksum field value', async () => {
+      const without = await computeProjectChecksum(baseDoc)
+      const withChecksum = await computeProjectChecksum({ ...baseDoc, checksum: 'abc' })
+      const withDifferent = await computeProjectChecksum({ ...baseDoc, checksum: 'xyz' })
+      expect(withChecksum).toBe(without)
+      expect(withDifferent).toBe(without)
+    })
   })
 
   it('preserves manifest order and checksum golden output', async () => {

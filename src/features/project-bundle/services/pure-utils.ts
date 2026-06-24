@@ -52,9 +52,24 @@ export function getUniqueBundleFileName(
   return bundleFileName
 }
 
-export async function computeSnapshotChecksum(snapshot: ProjectSnapshot): Promise<string> {
-  const dataForHash = { ...snapshot, checksum: undefined }
+/**
+ * Compute a SHA-256 integrity checksum over a project document, blanking the
+ * `checksum` field so the value is self-consistent regardless of whether it is
+ * present. Shared by both the refs (`.freecut.json` freecut-refs/1.0) and the
+ * debug `ProjectSnapshot` formats so both compute and verify integrity
+ * identically — canonicalization lives in one place.
+ */
+export async function computeProjectChecksum(doc: object): Promise<string> {
+  const dataForHash = { ...doc, checksum: undefined }
   return sha256Hex(JSON.stringify(dataForHash))
+}
+
+/**
+ * Snapshot checksum — delegates to the shared {@link computeProjectChecksum}.
+ * Preserved as a named export for existing callers.
+ */
+export async function computeSnapshotChecksum(snapshot: ProjectSnapshot): Promise<string> {
+  return computeProjectChecksum(snapshot)
 }
 
 export async function computeBundleManifestChecksum(manifest: BundleManifest): Promise<string> {

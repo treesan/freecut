@@ -135,10 +135,15 @@ vi.mock('./bundle-timeline', () => ({
   }),
 }))
 
-// Mock pure-utils
-vi.mock('./pure-utils', () => ({
-  sanitizeDownloadFilename: vi.fn((name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')),
-}))
+// Mock pure-utils — keep the real checksum helper so export checksum tests
+// can assert against computeProjectChecksum, override only the sanitizer.
+vi.mock('./pure-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./pure-utils')>()
+  return {
+    ...actual,
+    sanitizeDownloadFilename: vi.fn((name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')),
+  }
+})
 
 // Mock schema validation — the actual projectSchema is too complex for unit tests
 vi.mock('../schemas/refs-schema', () => ({
@@ -147,6 +152,7 @@ vi.mock('../schemas/refs-schema', () => ({
 }))
 
 import { exportProjectAsRefs } from './refs-export-service'
+import { computeProjectChecksum } from './pure-utils'
 
 function makeMockDirHandle(): {
   handle: FileSystemDirectoryHandle
@@ -271,6 +277,26 @@ describe('refs-export-service', () => {
 
       const { handle } = makeMockDirHandle()
       await expect(exportProjectAsRefs('missing', handle)).rejects.toThrow('Project not found')
+    })
+
+    it('writes a checksum matching computeProjectChecksum by default', async () => {
+      const { handle, files } = makeMockDirHandle()
+      await exportProjectAsRefs('proj-1', handle)
+
+      const written = JSON.parse(files.get('Test_Project.freecut.json')!)
+      expect(typeof written.checksum).toBe('string')
+      // The stored checksum must equal a fresh recompute over the doc with
+      // the checksum field blanked (self-consistent on read).
+      const { checksum: _ignored, ...docWithoutChecksum } = written
+      expect(written.checksum).toBe(await computeProjectChecksum(docWithoutChecksum))
+    })
+
+    it('omits the checksum when includeChecksum is false', async () => {
+      const { handle, files } = makeMockDirHandle()
+      await exportProjectAsRefs('proj-1', handle, { includeChecksum: false })
+
+      const written = JSON.parse(files.get('Test_Project.freecut.json')!)
+      expect(written.checksum).toBeUndefined()
     })
   })
 })

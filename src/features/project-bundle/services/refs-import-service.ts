@@ -14,7 +14,7 @@ import type {
   RefsImportResult,
   RefsResolutionFailure,
 } from '../types/refs'
-import { validateRefsProject } from '../schemas/refs-schema'
+import { validateRefsProject, formatValidationErrors } from '../schemas/refs-schema'
 import {
   createProject,
   createMedia,
@@ -31,8 +31,54 @@ import {
 } from './path-resolution'
 import { restoreTimelineFromBundle } from './bundle-timeline'
 import { migrateProject } from '@/shared/projects/migrations'
+import { computeProjectChecksum } from './pure-utils'
+import { importProjectFromJsonString } from './json-import-service'
+import { validateSnapshotData } from './json-import-service'
 
 const logger = createLogger('RefsImportService')
+
+// ---------------------------------------------------------------------------
+// Format auto-detection
+// ---------------------------------------------------------------------------
+
+/**
+ * A `freecut-refs/1.0` document carries an explicit `kind: "freecut-refs"`
+ * discriminator. This is the authoritative refs marker (D1).
+ */
+function isRefsDocument(parsed: unknown): parsed is RefsProject {
+  return (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    (parsed as { kind?: unknown }).kind === 'freecut-refs'
+  )
+}
+
+/**
+ * A debug `ProjectSnapshot` has a `project` field but no `kind` (snapshots
+ * predate the discriminator). `mediaReferences` is typical but a snapshot
+ * could in theory omit it; `project` is always present. Detection is only
+ * routing — the snapshot's own `validateSnapshotData` does the real check.
+ *
+ * Any document carrying a `kind` that isn't `"freecut-refs"` (a future third
+ * format) intentionally does NOT match here, so it falls through to the
+ * aggregated error rather than misrouting to snapshot import.
+ */
+function isSnapshotDocument(parsed: unknown): boolean {
+  return typeof parsed === 'object' && parsed !== null && !('kind' in parsed) && 'project' in parsed
+}
+
+/**
+ * Map refs import options onto the snapshot import options where they
+ * overlap. Snapshot media-matching flags are left at their own defaults
+ * (true); snapshot import matches media only against the existing workspace.
+ */
+function toSnapshotImportOptions(options: RefsImportOptions): { newProjectName?: string } {
+  const mapped: { newProjectName?: string } = {}
+  if (options.newProjectName !== undefined) {
+    mapped.newProjectName = options.newProjectName
+  }
+  return mapped
+}
 
 // ---------------------------------------------------------------------------
 // Main import function
@@ -54,7 +100,7 @@ export async function importProjectFromRefs(
   options: RefsImportOptions = {},
   onProgress?: (progress: { percent: number; stage: string; currentFile?: string }) => void,
 ): Promise<RefsImportResult> {
-  // Step 1: Read + parse + validate the JSON file
+  // Step 1: Read + parse the JSON file
   onProgress?.({ percent: 0, stage: 'validating' })
 
   const file = await jsonFileHandle.getFile()
@@ -66,9 +112,59 @@ export async function importProjectFromRefs(
     throw new Error(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
   }
 
+  // Step 2: Detect document format and dispatch. The `.freecut.json`
+  // extension is shared by the refs (freecut-refs/1.0) format and the debug
+  // `ProjectSnapshot` format. Detection is by document shape: `kind` is the
+  // refs discriminator; a `project` field without `kind` denotes a snapshot.
+  // Neither shape → aggregated error. See design D1/D2.
+  if (!isRefsDocument(parsed)) {
+    if (isSnapshotDocument(parsed)) {
+      // Delegate to the snapshot import path. It takes the raw JSON string and
+      // matches media only against the existing workspace library (snapshot
+      // semantics). Snapshot import is fast (no file IO beyond reading the
+      // JSON), so progress is best-effort: validate → complete.
+      onProgress?.({ percent: 10, stage: 'validating' })
+      const snapshotResult = await importProjectFromJsonString(
+        text,
+        toSnapshotImportOptions(options),
+      )
+      onProgress?.({ percent: 100, stage: 'complete' })
+
+      // Adapt the snapshot result to the refs result shape.
+      return {
+        project: snapshotResult.project,
+        mediaImported: snapshotResult.matchedMedia.length,
+        mediaUnresolved: snapshotResult.unmatchedMedia.length,
+        failures: [],
+      }
+    }
+
+    // Neither shape matched — produce a single aggregated error combining
+    // both validators' messages so the user sees why neither format applied.
+    const refsValidation = validateRefsProject(parsed)
+    const refsErrors = refsValidation.success
+      ? []
+      : refsValidation.errors
+        ? formatValidationErrors(refsValidation.errors).map((m) => `refs: ${m}`)
+        : ['refs: unknown validation error']
+    let snapshotErrors: string[] = []
+    try {
+      const snapshotValidation = await validateSnapshotData(parsed)
+      snapshotErrors = snapshotValidation.errors.map((m) => `snapshot: ${m.message}`)
+    } catch {
+      snapshotErrors = ['snapshot: could not validate']
+    }
+    const allErrors = [...refsErrors, ...snapshotErrors]
+    throw new Error(
+      `Unrecognized .freecut.json format — document is neither a refs nor a snapshot project${
+        allErrors.length > 0 ? `: ${allErrors.join('; ')}` : ''
+      }`,
+    )
+  }
+
+  // Step 3: Validate as a refs document
   const validation = validateRefsProject(parsed)
   if (!validation.success || !validation.data) {
-    const { formatValidationErrors } = await import('../schemas/refs-schema')
     const errors = validation.errors
       ? formatValidationErrors(validation.errors).join('; ')
       : 'Unknown validation error'
@@ -78,19 +174,33 @@ export async function importProjectFromRefs(
   const refsProject = validation.data as unknown as RefsProject
   onProgress?.({ percent: 10, stage: 'validating' })
 
-  // Step 2: Migrate the inner project schema
+  // Step 4: Verify the integrity checksum if present (warning-only). A
+  // corrupted JSON is far more likely to fail Zod first; the checksum's real
+  // value is catching subtle corruption Zod misses. Mismatch never aborts —
+  // the strict `fileSize + fileLastModified` identity gate (later in this
+  // flow) is the authoritative media check. See design D3.
+  if (refsProject.checksum) {
+    const recomputed = await computeProjectChecksum(refsProject)
+    if (recomputed !== refsProject.checksum) {
+      logger.warn(
+        `Refs document checksum mismatch — data may have been modified. Proceeding with import (strict media-identity gate still applies).`,
+      )
+    }
+  }
+
+  // Step 5: Migrate the inner project schema
   // migrateProject returns a MigrationResult wrapper ({ project, migrated, ... }),
   // not a Project — unwrap it. Using the wrapper directly would spread the
   // nested `project` field and leave the created project without an `id`.
   const migrationResult = migrateProject(refsProject.project as unknown as Project)
   const migratedProject = migrationResult.project
 
-  // Step 3: Build resolution context
+  // Step 6: Build resolution context
   onProgress?.({ percent: 15, stage: 'selecting_directory' })
   const workspaceMedia = await getAllMediaMetadata()
   const ctx = await buildResolutionContext(workspaceMedia, jsonDirectoryHandle)
 
-  // Step 4: Resolve each media reference
+  // Step 7: Resolve each media reference
   onProgress?.({ percent: 20, stage: 'importing_media' })
   const totalMedia = refsProject.media.length
   const outcomes: ResolutionOutcome[] = []
@@ -107,7 +217,7 @@ export async function importProjectFromRefs(
     })
   }
 
-  // Step 5: Create MediaMetadata for resolved refs
+  // Step 8: Create MediaMetadata for resolved refs
   const mediaIdMap = new Map<string, string>() // ref → new mediaId
   const failures: RefsResolutionFailure[] = []
   let mediaImported = 0
@@ -163,7 +273,7 @@ export async function importProjectFromRefs(
     }
   }
 
-  // Step 6: Remap timeline mediaIds
+  // Step 9: Remap timeline mediaIds
   onProgress?.({ percent: 85, stage: 'linking' })
   const projectData = { ...migratedProject }
 
@@ -188,7 +298,7 @@ export async function importProjectFromRefs(
     )
   }
 
-  // Step 7: Persist the project
+  // Step 10: Persist the project
   onProgress?.({ percent: 90, stage: 'linking' })
   const projectName = options.newProjectName ?? projectData.name
   const project = await createProject({
@@ -201,7 +311,7 @@ export async function importProjectFromRefs(
     await associateMediaWithProject(project.id, mediaId)
   }
 
-  // Step 8: Touch authorized roots that were used
+  // Step 11: Touch authorized roots that were used
   await touchUsedAuthorizedRoots(outcomes)
 
   onProgress?.({ percent: 100, stage: 'complete' })

@@ -54,6 +54,30 @@ vi.mock('./path-resolution', () => ({
   touchUsedAuthorizedRoots: vi.fn(async () => {}),
 }))
 
+// Mock json-import-service (snapshot path) — used by format auto-detection
+// when a snapshot-shaped document is delegated, and for the aggregated error
+// of a document that matches neither shape.
+vi.mock('./json-import-service', () => ({
+  importProjectFromJsonString: vi.fn(
+    async (_text: string, options: { newProjectName?: string }) => ({
+      project: {
+        id: 'snapshot-proj-1',
+        name: options.newProjectName ?? 'Snapshot Project',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      matchedMedia: [],
+      unmatchedMedia: [],
+      warnings: [],
+    }),
+  ),
+  validateSnapshotData: vi.fn(async () => ({
+    valid: false,
+    errors: [{ path: '', message: 'not a snapshot', code: 'schema_mismatch' }],
+    warnings: [],
+  })),
+}))
+
 // Mock bundle-timeline
 vi.mock('./bundle-timeline', () => ({
   restoreTimelineFromBundle: vi.fn((tl: unknown) => tl),
@@ -193,7 +217,9 @@ describe('refs-import-service', () => {
       errors: new Error('fail') as never,
     } as never)
 
-    const mockFile = { text: vi.fn(async () => '{}') }
+    // Feed a refs-shaped document so detection routes it through refs
+    // validation (a bare `{}` would now hit the aggregated-error branch).
+    const mockFile = { text: vi.fn(async () => JSON.stringify({ kind: 'freecut-refs' })) }
     const mockFileHandle = {
       getFile: vi.fn(async () => mockFile),
     } as unknown as FileSystemFileHandle
@@ -201,5 +227,113 @@ describe('refs-import-service', () => {
     await expect(importProjectFromRefs(mockFileHandle, undefined)).rejects.toThrow(
       'Invalid .freecut.json',
     )
+  })
+
+  describe('format auto-detection', () => {
+    function makeFileHandle(content: string): FileSystemFileHandle {
+      const mockFile = { text: vi.fn(async () => content) }
+      return { getFile: vi.fn(async () => mockFile) } as unknown as FileSystemFileHandle
+    }
+
+    it('delegates a snapshot document (no kind, has project) to snapshot import', async () => {
+      const { importProjectFromJsonString } = await import('./json-import-service')
+      const snapshotDoc = {
+        version: '1.0',
+        exportedAt: '2026-01-01T00:00:00.000Z',
+        editorVersion: '1.0.0',
+        project: { id: 'snap-proj', name: 'Snap' },
+        mediaReferences: [],
+      }
+
+      const result = await importProjectFromRefs(
+        makeFileHandle(JSON.stringify(snapshotDoc)),
+        undefined,
+        { newProjectName: 'Imported Snap' },
+      )
+
+      expect(importProjectFromJsonString).toHaveBeenCalledWith(JSON.stringify(snapshotDoc), {
+        newProjectName: 'Imported Snap',
+      })
+      expect(result.project.id).toBe('snapshot-proj-1')
+    })
+
+    it('throws an aggregated error for a document matching neither shape', async () => {
+      await expect(
+        importProjectFromRefs(makeFileHandle(JSON.stringify({ foo: 'bar' })), undefined),
+      ).rejects.toThrow('Unrecognized .freecut.json format')
+    })
+
+    it('does NOT route a kind-bearing non-refs document to snapshot import', async () => {
+      // A future third format with a `kind` must fall through to the aggregated
+      // error, not misroute to snapshot import (design risk mitigation).
+      const { importProjectFromJsonString } = await import('./json-import-service')
+      vi.mocked(importProjectFromJsonString).mockClear()
+
+      await expect(
+        importProjectFromRefs(
+          makeFileHandle(JSON.stringify({ kind: 'some-future-format', project: { id: 'x' } })),
+          undefined,
+        ),
+      ).rejects.toThrow('Unrecognized .freecut.json format')
+
+      expect(importProjectFromJsonString).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('checksum verification', () => {
+    it('warns (does not throw) on a tampered checksum', async () => {
+      const { validateRefsProject } = await import('../schemas/refs-schema')
+      const refsProject = makeRefsProject([makeMediaEntry()])
+      // Attach a deliberately-wrong checksum.
+      refsProject.checksum = 'deadbeef'
+      vi.mocked(validateRefsProject).mockReturnValueOnce({
+        success: true,
+        data: refsProject,
+      } as never)
+
+      const { resolveMediaRef } = await import('./path-resolution')
+      vi.mocked(resolveMediaRef).mockResolvedValueOnce({
+        kind: 'resolved',
+        fileHandle: {} as FileSystemFileHandle,
+        fileSize: 1000,
+        fileLastModified: 1700000000000,
+      })
+
+      // Should NOT throw despite the mismatch — import proceeds.
+      const result = await importProjectFromRefs(
+        {
+          getFile: vi.fn(async () => ({ text: vi.fn(async () => JSON.stringify(refsProject)) })),
+        } as unknown as FileSystemFileHandle,
+        undefined,
+      )
+      expect(result.project.id).toBe('new-proj-1')
+    })
+
+    it('skips verification when checksum is absent', async () => {
+      const { validateRefsProject } = await import('../schemas/refs-schema')
+      const refsProject = makeRefsProject([makeMediaEntry()])
+      // No checksum field — back-compat with older files.
+      expect(refsProject.checksum).toBeUndefined()
+      vi.mocked(validateRefsProject).mockReturnValueOnce({
+        success: true,
+        data: refsProject,
+      } as never)
+
+      const { resolveMediaRef } = await import('./path-resolution')
+      vi.mocked(resolveMediaRef).mockResolvedValueOnce({
+        kind: 'resolved',
+        fileHandle: {} as FileSystemFileHandle,
+        fileSize: 1000,
+        fileLastModified: 1700000000000,
+      })
+
+      const result = await importProjectFromRefs(
+        {
+          getFile: vi.fn(async () => ({ text: vi.fn(async () => JSON.stringify(refsProject)) })),
+        } as unknown as FileSystemFileHandle,
+        undefined,
+      )
+      expect(result.mediaImported).toBe(1)
+    })
   })
 })

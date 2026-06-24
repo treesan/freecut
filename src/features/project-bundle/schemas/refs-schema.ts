@@ -67,6 +67,8 @@ const refsProjectSchema = z
     project: projectSchema,
     /** Media references (path-based, no bytes) */
     media: z.array(refsMediaEntrySchema).min(0),
+    /** Optional SHA-256 integrity checksum (verified as a non-fatal warning) */
+    checksum: z.string().optional(),
   })
   .passthrough()
 
