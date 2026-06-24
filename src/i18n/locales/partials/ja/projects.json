@@ -11,6 +11,7 @@
     "viewOnGitHub": "GitHubで見る",
     "newProject": "新規プロジェクト",
     "importProject": "プロジェクトをインポート",
+    "importRefsProject": ".freecut.json をインポート",
     "errorLoading": "プロジェクトの読み込みエラー",
     "loadingProjects": "プロジェクトを読み込み中...",
     "copySuffix": "{{name}}（コピー）",

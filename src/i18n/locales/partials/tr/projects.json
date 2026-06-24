@@ -11,6 +11,7 @@
     "viewOnGitHub": "GitHub'da Görüntüle",
     "newProject": "Yeni Proje",
     "importProject": "Projeyi İçe Aktar",
+    "importRefsProject": ".freecut.json İçe Aktar",
     "errorLoading": "Projeler yüklenirken hata",
     "loadingProjects": "Projeler yükleniyor...",
     "copySuffix": "{{name}} (Kopya)",

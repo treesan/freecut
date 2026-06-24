@@ -11,6 +11,7 @@
     "viewOnGitHub": "在 GitHub 上查看",
     "newProject": "新建项目",
     "importProject": "导入项目",
+    "importRefsProject": "导入 .freecut.json",
     "errorLoading": "加载项目时出错",
     "loadingProjects": "正在加载项目...",
     "copySuffix": "{{name}}（副本）",
